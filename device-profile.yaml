@@ -10,16 +10,15 @@ signals:
     binding: { holding: 0x0040, type: uint16 }
     access: commissioning
     enum: { 0: relative, 1: absolute }
-    selects: [humidity]          # declares the dependency
 
   humidity:
     binding: { input: 0x0010, type: uint16 }
     variants:
-      - when: humidity_mode == relative
+      - effective_when: humidity_mode == relative
         unit: "%RH"
         scale: 0.1
         range: [0, 100]
-      - when: humidity_mode == absolute
+      - effective_when: humidity_mode == absolute
         unit: "g/m3"
         scale: 0.1
         range: [0, 50]
@@ -28,10 +27,11 @@ signals:
     binding: { holding: 0x0050, type: uint16 }
     access: commissioning
     enum: { 0: LPG, 1: propane, 2: methane }
-    selects: [gas_concentration, alarm_level_1, alarm_level_2]
     on_write:
-      reread: dependents        # default: everything that references gas_type
-      settle_ms: 200    
+      # 'dependents' resolves via the derived reverse index: every signal
+      # whose *_when / constraints[].when expressions reference gas_type.
+      reread: dependents
+      settle_ms: 200
 
   alarm_level_1:
     binding: { holding: 0x0060, type: uint16 }
