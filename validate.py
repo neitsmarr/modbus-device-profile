@@ -224,6 +224,127 @@ def reverse_index(doc) -> dict[str, set[str]]:
     return index
 
 
+# Which wire encodings can carry which semantic type (D10). The point of the
+# split is that this is a many-to-many table, not an identity.
+ENCODINGS_FOR = {
+    "bool":  {"coil", "discrete", "bit", "uint16", "int16"},
+    "int":   {"uint16", "int16", "uint32", "int32", "uint64", "int64"},
+    "real":  {"float32", "float64", "uint16", "int16", "uint32", "int32"},
+    "enum":  {"uint16", "uint32"},
+    "flags": {"uint16", "uint32"},
+    "text":  {"chars"},
+}
+
+# Inclusive raw range each width can hold.
+WIDTH_CAPACITY = {
+    "bool": (0, 1), "uint8": (0, 255), "int8": (-128, 127),
+    "uint16": (0, 65535), "int16": (-32768, 32767),
+    "uint32": (0, 4294967295), "int32": (-2147483648, 2147483647),
+    "uint64": (0, 18446744073709551615), "int64": (-9223372036854775808, 9223372036854775807),
+}
+INTEGER_WIDTHS = ["bool", "uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64"]
+
+
+def raw_span(sig):
+    """The range expressed in raw (pre-scale) units, or None if there is no range."""
+    if "range" not in sig:
+        return None
+    scale = sig.get("scale", 1) or 1
+    lo, hi = sig["range"]
+    return (lo / scale, hi / scale)
+
+
+def narrowest_width(lo: float, hi: float):
+    for w in ("uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64"):
+        c = WIDTH_CAPACITY[w]
+        if lo >= c[0] - 0.5 and hi <= c[1] + 0.5:
+            return w
+    return None
+
+
+def check_types(doc, rep: Report) -> None:
+    """The semantic type / wire encoding / storage width triangle."""
+    for name, sig in (doc.get("signals") or {}).items():
+        stype = sig.get("type")
+        if stype is None:
+            continue                                   # schema already reported it
+
+        # -- semantic type vs wire encoding --------------------------------
+        binding = sig.get("binding")
+        if binding:
+            enc = binding.get("encoding")
+            if enc is None:
+                rep.error(f"signals/{name}/binding: no encoding given")
+            elif enc not in ENCODINGS_FOR.get(stype, set()):
+                rep.error(
+                    f"signals/{name}: type '{stype}' cannot be carried as '{enc}' "
+                    f"(allowed: {', '.join(sorted(ENCODINGS_FOR[stype]))})"
+                )
+            elif stype == "real" and enc not in ("float32", "float64") and "scale" not in sig:
+                rep.error(
+                    f"signals/{name}: a real carried as '{enc}' needs a scale, "
+                    f"or its fractional part is unrepresentable"
+                )
+            # does the range survive the wire?
+            span = raw_span(sig)
+            if span and enc in WIDTH_CAPACITY:
+                c = WIDTH_CAPACITY[enc]
+                if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
+                    rep.error(
+                        f"signals/{name}: range {sig['range']} is raw "
+                        f"{span[0]:.0f}..{span[1]:.0f} after scale, which does not fit "
+                        f"encoding '{enc}' ({c[0]}..{c[1]})"
+                    )
+            # do all the flag bits reach the wire?
+            if stype == "flags" and enc in ("uint16", "uint32"):
+                width = 16 if enc == "uint16" else 32
+                top = max((int(b) for b in (sig.get("flags") or {})), default=0)
+                if top >= width:
+                    rep.error(
+                        f"signals/{name}: flag bit {top} is outside a {width}-bit "
+                        f"encoding '{enc}'"
+                    )
+            # does the enum fit?
+            if stype == "enum" and enc in WIDTH_CAPACITY:
+                top = max((int(v) for v in (sig.get("enum") or {})), default=0)
+                if top > WIDTH_CAPACITY[enc][1]:
+                    rep.error(f"signals/{name}: enum value {top} does not fit '{enc}'")
+
+        # -- storage width -------------------------------------------------
+        declared = sig.get("storage")
+        span = raw_span(sig)
+        derived = None
+        if stype == "bool":
+            derived = "bool"
+        elif stype == "enum":
+            top = max((int(v) for v in (sig.get("enum") or {})), default=0)
+            derived = narrowest_width(0, top)
+        elif stype == "flags":
+            top = max((int(b) for b in (sig.get("flags") or {})), default=0)
+            derived = "uint32" if top >= 16 else ("uint16" if top >= 8 else "uint8")
+        elif span:
+            derived = narrowest_width(*span)
+        elif binding and binding.get("encoding") in WIDTH_CAPACITY:
+            derived = binding["encoding"]
+
+        if declared:
+            if declared in WIDTH_CAPACITY and span:
+                c = WIDTH_CAPACITY[declared]
+                if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
+                    rep.error(
+                        f"signals/{name}: declared storage '{declared}' cannot hold "
+                        f"raw range {span[0]:.0f}..{span[1]:.0f}"
+                    )
+        elif derived is None and stype != "text":
+            rep.error(
+                f"signals/{name}: storage width is underivable -- give it a range, "
+                f"a binding encoding, or an explicit storage"
+            )
+
+        if stype == "text" and "max_length" not in sig:
+            rep.error(f"signals/{name}: type 'text' needs max_length")
+
+
 def check_internal_properties(doc, rep: Report) -> None:
     """Checks that exist because a property may have no Modbus binding (D8)."""
     signals = doc.get("signals") or {}
@@ -293,6 +414,7 @@ def main(argv: list[str]) -> int:
 
     check_schema(doc, rep)
     check_references(doc, rep)
+    check_types(doc, rep)
     check_internal_properties(doc, rep)
     index = reverse_index(doc)
     check_reread_dependents(doc, index, rep)

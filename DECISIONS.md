@@ -513,3 +513,78 @@ what an abstraction demanding an escape hatch on first contact is worth.
 repository has one device, so an include buys indirection and no reuse.
 Revisit when a second device lands here, and extract only the rows in the top
 two bands of that table.
+
+## D10 — Three type facts, not one: semantic type, wire encoding, storage width
+
+**The defect.** `binding.type: uint16` was doing three jobs at once and only
+honestly doing one. Measured across the 209 bound properties, the wire type said
+`uint16` (164) or `int16` (45) and nothing else. What those values actually were:
+92 integer quantities, 51 enumerations, 49 real quantities, 19 bit sets. The
+format never stated any of it. Firmware wanting `bool` and `typedef enum` had to
+infer the type from whether an `enum:` map happened to be present, and "this is
+a real" from a `scale:` being there. That worked by accident.
+
+D8 made it worse: it left `type` inside `binding` and then made `binding`
+optional. So the two internal properties had **no type information at all** —
+and the settings-storage generator, the exact thing D8 was for, had nothing to
+generate from.
+
+**The rule.** Three independent facts, each where it belongs:
+
+| fact | question | lives on | in the file |
+|---|---|---|---|
+| semantic type | what *is* this value? | the property | `type:` |
+| wire encoding | how is it carried over Modbus? | the binding | `binding.encoding:` |
+| storage width | how many bytes when persisted? | derived from range | `storage:` (override only) |
+
+Semantic types: `bool`, `int`, `real`, `enum`, `flags`, `text`. This is the type
+firmware declares — a bool as `bool`, an enum as an enum typedef — and it is
+deliberately not a register width.
+
+They are independent because the device makes them independent: one `bool` can
+be a coil, a discrete input, or a bit in a register; one `real` can be `float32`
+across two registers or a scaled `int16` in one, at lower resolution; a 32-bit
+`int` needs two registers whatever it means. `binding.type` was renamed to
+`binding.encoding` so it stops looking like the value's type, and the register
+span now follows from the encoding width rather than being stated — `count` is
+array length only.
+
+**Storage is derived, not declared.** Following D1: the width comes from `range`
+(divided by `scale` for a real), falling back to the binding encoding, and
+`storage:` is an override for when the device stores wider than the range needs.
+A declared width is checked against the range either way, and a property where
+none of the three is available is an error — which is exactly the hole D8 left.
+
+**Because the three are now separate, seven classes of error became detectable.**
+All verified to fire:
+
+- an enum or a bool carried as `float32`
+- a real on an integer encoding with no scale, so its fraction is unrepresentable
+- a range that does not survive its encoding (`[0, 4294967295]` in a `uint16`)
+- a flag bit outside the encoding's width (bit 20 in a `uint16`)
+- an enum value too large for its encoding
+- a declared storage width too small for the range
+- a storage width that cannot be derived at all
+
+The compatibility table (which encodings can carry which type) lives in
+`validate.py` rather than the schema, because it is a many-to-many relation and
+reads as a table there instead of as nested `if`/`then`.
+
+**Schema-enforced consistency:** `type: enum` requires an `enum` map and nothing
+else may carry one; same for `flags`; `scale` and `decimals` are rejected on
+`enum`, `flags`, `bool` and `text`; `max_length` belongs to `text` and only
+`text`. Procedure parameters now take semantic types too — they were still
+declaring `uint16`, which the new schema caught.
+
+**Not changed:** the 24 two-member enums (`disabled`/`enabled`,
+`disconnected`/`connected`) stay enums rather than becoming bools. The library
+models them as two-entry dictionaries, the names carry domain meaning a boolean
+would throw away, and an enum can grow a third member while a bool cannot.
+`bool` exists for values that are genuinely truth values, and matters most for
+coil and discrete bindings — which this device does not currently use.
+
+**Open.** `text` is defined but unused; the hardware and firmware version
+registers are still `int` when they are really packed hex bytes (noted in D6),
+and `text` with a `chars` encoding may or may not be the right home for them.
+Whether a real should ever be stored as `float32` on-device while travelling as
+a scaled integer is untested — the format allows it, nothing exercises it.

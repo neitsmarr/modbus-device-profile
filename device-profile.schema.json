@@ -129,33 +129,36 @@
         "input": { "$ref": "#/$defs/address" },
         "coil": { "$ref": "#/$defs/address" },
         "discrete": { "$ref": "#/$defs/address" },
-        "type": { "$ref": "#/$defs/data_type" },
+        "encoding": {
+          "$ref": "#/$defs/wire_encoding",
+          "description": "How the value is packed into registers. This is a transport fact, not the value's type: the register span follows from the width (uint32 and float32 occupy two registers), and a scaled integer encoding carries a real."
+        },
         "count": {
           "type": "integer",
           "minimum": 1,
-          "description": "Element count for arrays and strings. Omitted means 1."
+          "description": "Element count for arrays and strings. Omitted means 1. This is array length, not register span -- the span comes from the encoding width."
         },
         "bit": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 63,
-          "description": "Bit position, for a flag packed inside a register."
+          "maximum": 15,
+          "description": "Bit position within the register, for a bool packed into one."
         },
         "word_order": { "enum": ["big", "little"], "description": "Overrides access.word_order for this binding." }
       },
       "dependentSchemas": {
         "bit": {
-          "required": ["type"],
-          "properties": { "type": { "const": "bool" } }
+          "required": ["encoding"],
+          "properties": { "encoding": { "const": "bit" } }
         }
       }
     },
 
     "address": { "type": "integer", "minimum": 0, "maximum": 65535 },
 
-    "data_type": {
-      "description": "Provisional list -- extend as devices need it. Widths drive both the register count and the firmware accessor.",
-      "enum": ["bool", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64", "string"]
+    "wire_encoding": {
+      "description": "How a value is packed into Modbus registers. Which of these is legal depends on the property's semantic type, and validate.py holds that compatibility table: 'coil' and 'discrete' and 'bit' carry a bool, an unsigned integer carries an enum or a flags word, and a real travels either as a float or as a scaled integer.",
+      "enum": ["coil", "discrete", "bit", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64", "chars"]
     },
 
     "presentation": {
@@ -179,8 +182,37 @@
     "signal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["title", "kind"],
+      "required": ["title", "kind", "type"],
       "allOf": [
+        {
+          "description": "type and the member map have to agree: an enum needs enum members, a flags value needs flag bits, and nothing else may carry either.",
+          "if": { "properties": { "type": { "const": "enum" } }, "required": ["type"] },
+          "then": { "required": ["enum"] },
+          "else": { "not": { "required": ["enum"] } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "flags" } }, "required": ["type"] },
+          "then": { "required": ["flags"] },
+          "else": { "not": { "required": ["flags"] } }
+        },
+        {
+          "description": "scale and decimals describe a continuous quantity; they are meaningless on anything else.",
+          "if": {
+            "anyOf": [
+              { "properties": { "type": { "const": "enum" } }, "required": ["type"] },
+              { "properties": { "type": { "const": "flags" } }, "required": ["type"] },
+              { "properties": { "type": { "const": "bool" } }, "required": ["type"] },
+              { "properties": { "type": { "const": "text" } }, "required": ["type"] }
+            ]
+          },
+          "then": { "not": { "anyOf": [{ "required": ["scale"] }, { "required": ["decimals"] }] } }
+        },
+        {
+          "description": "max_length belongs to text and only to text.",
+          "if": { "properties": { "type": { "const": "text" } }, "required": ["type"] },
+          "then": { "required": ["max_length"] },
+          "else": { "not": { "required": ["max_length"] } }
+        },
         {
           "description": "A command is invoked, so it is written and never read back as state.",
           "if": { "properties": { "kind": { "const": "command" } }, "required": ["kind"] },
@@ -225,6 +257,18 @@
         "kind": {
           "description": "What sort of thing this is, which is what the generators switch on. 'setting' is persisted in non-volatile memory and has a factory default; 'measurement' is produced by the device and is volatile; 'command' is invoked and stores nothing. Explicit rather than inferred, because an internal property has no table or access pattern to infer it from.",
           "enum": ["setting", "measurement", "command"]
+        },
+        "type": {
+          "description": "What the value IS, independent of how any transport carries it. 'bool' is a truth value; 'int' a whole quantity; 'real' a continuous one; 'enum' one of named members; 'flags' a set of named bits; 'text' a character string. This is the type firmware should declare -- bool as bool, enum as an enum typedef -- and it is deliberately NOT the register width: a real may travel as float32 over two registers or as a scaled int16 over one, and a bool as a coil, a discrete input or a bit in a register.",
+          "enum": ["bool", "int", "real", "enum", "flags", "text"]
+        },
+        "storage": {
+          "description": "Width used when the value is persisted or held in a live-data struct. Omit it and the width is derived from range (and scale, for a real), which is the normal case; declare it only when the device stores the value wider than the range needs, or when there is no range to derive from. Checked against the range either way.",
+          "enum": ["bool", "uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64"]
+        },
+        "max_length": {
+          "description": "Maximum character count, for type 'text' only.",
+          "type": "integer", "minimum": 1
         },
         "title": { "type": "string" },
         "description": { "type": "string" },
@@ -446,7 +490,7 @@
             "oneOf": [{ "required": ["enum_from"] }, { "required": ["type"] }],
             "properties": {
               "enum_from": { "$ref": "#/$defs/signal_ref", "description": "Take the allowed values from that signal's enum." },
-              "type": { "$ref": "#/$defs/data_type" },
+              "type": { "enum": ["bool", "int", "real", "enum", "text"] },
               "range": { "$ref": "#/$defs/range" },
               "default": { "type": ["number", "string", "boolean"] },
               "title": { "type": "string" }

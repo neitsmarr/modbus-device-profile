@@ -86,6 +86,27 @@ def main() -> int:
     reject("function code not in Modbus", lambda d: d["access"]["supported_fc"].append(99))
     reject("max_read_words above the Modbus limit", lambda d: d["access"].update({"max_read_words": 200}))
 
+    print("-- semantic type")
+    reject("property with no semantic type", lambda d: sig(d, "ventilation_level").pop("type"))
+    reject("type enum without an enum map",
+           lambda d: sig(d, "operating_mode").pop("enum"))
+    reject("enum map on a non-enum type",
+           lambda d: sig(d, "ventilation_level").update({"enum": {0: "off"}}))
+    reject("type flags without a flags map",
+           lambda d: sig(d, "supply_fan_state").pop("flags"))
+    reject("scale on an enum",
+           lambda d: sig(d, "operating_mode").update({"scale": 0.1}))
+    reject("decimals on a flags word",
+           lambda d: sig(d, "supply_fan_state").update({"decimals": 1}))
+    reject("max_length on a non-text property",
+           lambda d: sig(d, "ventilation_level").update({"max_length": 8}))
+    reject("text without max_length",
+           lambda d: sig(d, "ventilation_level").update({"type": "text"}))
+    reject("unknown wire encoding",
+           lambda d: sig(d, "ventilation_level")["binding"].update({"encoding": "uint12"}))
+    reject("storage width that is not a real width",
+           lambda d: sig(d, "ventilation_level").update({"storage": "int24"}))
+
     print("-- enum and flags")
     reject("both enum and flags on one signal",
            lambda d: sig(d, "supply_fan_state").update({"enum": {0: "ok"}}))
@@ -119,8 +140,28 @@ def main() -> int:
 
     print("-- must stay legal")
     accept("uppercase enum member", lambda d: sig(d, "operating_mode")["enum"].update({9: "ECO"}))
-    accept("bit flag as bool",
-           lambda d: sig(d, "supply_digital_input_state")["binding"].update({"bit": 3, "type": "bool"}))
+    def bool_on_coil(d):
+        d["signals"]["supply_fan_enable"] = {
+            "title": "Supply Fan Enable", "kind": "setting", "type": "bool",
+            "binding": {"coil": 5, "encoding": "coil"}, "default": False,
+        }
+
+    def bool_as_bit(d):
+        d["signals"]["supply_fan_running"] = {
+            "title": "Supply Fan Running", "kind": "measurement", "type": "bool",
+            "access": "read_only", "binding": {"input": 9, "encoding": "bit", "bit": 3},
+        }
+
+    def real_as_float(d):
+        s = sig(d, "supply_ch1_temperature_level")
+        s["binding"]["encoding"] = "float32"
+        s.pop("scale")
+
+    accept("a bool on a coil", bool_on_coil)
+    accept("a bool as a bit in a register", bool_as_bit)
+    accept("the same real carried as float32 instead of scaled int16", real_as_float)
+    accept("storage declared wider than the range needs",
+           lambda d: sig(d, "ventilation_level").update({"storage": "uint32"}))
     accept("hidden service register", lambda d: sig(d, "internal_voltage_3v3").update({"hidden": True}))
     accept("internal property with no binding (D8)",
            lambda d: sig(d, "ventilation_level").pop("binding"))
