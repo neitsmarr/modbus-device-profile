@@ -825,3 +825,90 @@ decision above rests on the churn data alone.
 is still D9's: split by subsystem, never by layer, because a layer split
 separates the one pair -- a property's meaning and its address -- that is always
 read together.
+
+## D15 — Registers are entities. Two documents, and D9/D14 are overturned
+
+**The complaint that broke it.** `bitfields:` should not exist, and a register
+carrying several properties has no clean place for its description. Both are
+symptoms of one defect: **the property-to-register relation is many-to-many, and
+it was modelled as a per-property attribute.**
+
+Measured on the profile as it stood:
+
+- 87 properties shared 19 registers -- N properties to 1 register, which a
+  per-property `binding` simply cannot express. `bitfields:` was the side-table
+  that hid it, and it broke both D1 (you could not read a property and know its
+  register without following a reference) and D5 (the register's identity lived
+  apart from its bits)
+- 1 property to N registers is implied too, by `uint32`, `float32` and `chars`
+- 23 unoccupied holding ranges were undescribable, because a reserved or
+  withdrawn range belongs to no property at all
+- register title, description and access had no owner. For a packed status word,
+  read-only is a fact about the register, not about each of its eight bits
+
+**The fix: a register is an entity.** It owns its space, address, title, prose
+and access, and its `fields` say which properties it carries and how:
+
+    - space: input
+      address: 1
+      title: "Device Status - Errors"
+      description: >-
+        Fault conditions that stop normal operation.
+      access: read_only
+      fields:
+        - { bit: 0, property: error_supply_voltage_fault }
+        - { bit: 1, property: error_internal_voltage_fault }
+
+    - space: holding
+      from: 7
+      to: 8
+      reserved: "Reserved for future interface settings."
+
+`bitfields:` is gone. N:1 is a field list, 1:N is a field with a wide encoding,
+a reserved range is a register carrying nothing, and a register with exactly one
+field needs no title -- it borrows its property's, so nothing is duplicated.
+
+**Two documents.** `device-properties.yaml` holds the semantic layer and
+`device-modbus.yaml` the register map, each with its own schema. Once registers
+own their identity the protocol layer is self-contained and references properties
+by name, so a second interface could be added later as another document without
+touching the first. `signals:` became `properties:` and `signal:` became
+`property:`, since the word now covers settings, live data and commands.
+
+**This overturns D9 and D14, and the reason is worth recording.** Both defended
+one file on *locality*: a property's meaning and its address are read together.
+That argument only holds while the address is a property attribute -- so it was
+defending the defect, not the design. Once registers are entities, locality is
+already gone and the file count is a minor consequence.
+
+D14 also overstated the cost of coordinated edits. The two documents hold
+**complementary** facts, not duplicated ones: adding a register genuinely is two
+facts -- what it means, and where it lives. Nothing can disagree, because nothing
+is stated twice.
+
+D14's churn measurement stands as data and is simply not an argument against
+this: it measured edit coupling, not drift.
+
+**Safety is recovered as a check, not lost.** What a single file gave for free
+was completeness -- a property without an address was visibly incomplete.
+`validate.py` now has a third layer for exactly that, and every check below was
+verified to fire:
+
+- a property carried by no register and not marked internal (the case that used
+  to be a silently deleted `binding:` line)
+- a field naming a property that does not exist
+- a property carried by two registers
+- an internal property that a register carries anyway
+- a type its encoding cannot carry, and a real on an integer encoding with no scale
+- a non-bool given a bit position
+- a wide encoding overlapping the following register
+- a reserved range over an occupied register
+- a register whose declared access disagrees with its properties
+
+**Scale.** 279 properties in the semantic document, 209 registers in the map,
+277 fields. Two schemas, 61 negative tests.
+
+**Open.** The register map still describes none of its 23 unoccupied ranges:
+whether each is reserved, withdrawn or merely unassigned is a firmware fact. The
+`sections:` question from D13 is now easier -- a section is a run of registers in
+the map, so it belongs to the protocol document.

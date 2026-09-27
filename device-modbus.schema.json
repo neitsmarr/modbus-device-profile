@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/modbus-device-profile/device-modbus.schema.json",
+  "title": "Modbus register map",
+  "description": "The Modbus interface of one device: transport limits and the register map. A register is an entity here rather than an attribute of a property, which is what lets one register carry several properties as bits, one property span several registers, and a range be reserved carrying nothing at all -- none of which a per-property binding could express (D15). Properties are referenced by name from the properties document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "registers"
+  ],
+  "properties": {
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Transport-level facts about what this device tolerates, as opposed to what Modbus permits.",
+      "properties": {
+        "supported_fc": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              15,
+              16,
+              23
+            ]
+          }
+        },
+        "max_read_words": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 125
+        },
+        "max_write_words": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 123
+        },
+        "gaps_readable": {
+          "type": "boolean"
+        },
+        "turnaround_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "byte_order": {
+          "enum": [
+            "big",
+            "little"
+          ]
+        },
+        "word_order": {
+          "enum": [
+            "big",
+            "little"
+          ]
+        }
+      }
+    },
+    "registers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/register"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 48,
+      "description": "Also has to be a valid C identifier: the firmware X-macro pastes these into token names."
+    },
+    "address": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "register": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "space"
+      ],
+      "description": "One register, or a reserved range of them.",
+      "oneOf": [
+        {
+          "required": [
+            "address"
+          ],
+          "not": {
+            "required": [
+              "from"
+            ]
+          }
+        },
+        {
+          "required": [
+            "from",
+            "to",
+            "reserved"
+          ],
+          "not": {
+            "required": [
+              "address"
+            ]
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "description": "A reserved range carries nothing; anything else carries something.",
+          "if": {
+            "required": [
+              "reserved"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fields"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "fields"
+            ]
+          }
+        },
+        {
+          "description": "A register carrying more than one property needs its own name: there is no single property to borrow one from.",
+          "if": {
+            "properties": {
+              "fields": {
+                "minItems": 2
+              }
+            },
+            "required": [
+              "fields"
+            ]
+          },
+          "then": {
+            "required": [
+              "title"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "space": {
+          "enum": [
+            "holding",
+            "input",
+            "coil",
+            "discrete"
+          ],
+          "description": "Which Modbus address space. These are independent ranges: the same number in two spaces is two different registers."
+        },
+        "address": {
+          "$ref": "#/$defs/address"
+        },
+        "from": {
+          "$ref": "#/$defs/address"
+        },
+        "to": {
+          "$ref": "#/$defs/address"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The register's name in the register map. Optional when it carries exactly one property, which lends its title."
+        },
+        "description": {
+          "type": "string",
+          "description": "Prose for the register map. A register carrying several properties has no property to borrow this from, which is the reason registers are entities here."
+        },
+        "access": {
+          "enum": [
+            "read_only",
+            "write_only",
+            "read_write"
+          ],
+          "description": "Whether a client may write this register. A fact about the register: eight bools packed into a status word are read-only because the register is."
+        },
+        "reserved": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this range carries nothing: reserved for future use, withdrawn, vendor-private. The prose is the point -- a bare gap is indistinguishable from an oversight."
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "property"
+      ],
+      "description": "One property carried by this register, either whole or as a single bit.",
+      "oneOf": [
+        {
+          "required": [
+            "encoding"
+          ],
+          "not": {
+            "required": [
+              "bit"
+            ]
+          }
+        },
+        {
+          "required": [
+            "bit"
+          ],
+          "not": {
+            "required": [
+              "encoding"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "property": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the property in the properties document."
+        },
+        "encoding": {
+          "enum": [
+            "bit",
+            "uint16",
+            "int16",
+            "uint32",
+            "int32",
+            "uint64",
+            "int64",
+            "float32",
+            "float64",
+            "chars"
+          ],
+          "description": "How the value is packed. A width wider than one register makes this register span the following addresses too."
+        },
+        "bit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "Bit position, for a bool packed into this register. No encoding is given: a bit is a bit."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Element count for an array or a string. Array length, not register span."
+        },
+        "word_order": {
+          "enum": [
+            "big",
+            "little"
+          ],
+          "description": "Overrides limits.word_order for this field."
+        }
+      }
+    }
+  }
+}

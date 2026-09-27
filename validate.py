@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""Validate a device profile, in two layers.
+"""Validate a device profile: a properties document plus a Modbus register map.
 
-Layer 1 is the JSON Schema: shape and vocabulary. It catches a misspelled key,
-a range with three numbers, a signal with no binding.
+Three layers.
 
-Layer 2 is everything a JSON Schema cannot express, because it needs to look at
-the whole document at once:
+Layer 1 is the JSON Schemas: shape and vocabulary of each document on its own.
 
-  * reference resolution -- does 'signal: cal_status' name a signal that exists?
-  * enum coverage        -- a constraint set keyed on gas_type that forgets one
-                            of gas_type's members is a hole a device will fall
-                            into in the field
-  * the reverse index    -- DECISIONS.md D1: nothing declares what it influences,
-                            so we derive it here and print it
+Layer 2 is what a schema cannot express because it needs a whole document at
+once -- reference resolution, enum coverage, storage widths, and D1's derived
+reverse index.
 
-Usage:  python validate.py [device-profile.yaml]
+Layer 3 is what neither document can check alone: the two must agree. Every
+property that is not internal has to be carried by exactly one register field,
+every field has to name a property that exists, no two fields may overlap, and a
+field's encoding has to suit the property's type. This layer is why the D15
+split costs nothing in safety -- the completeness a single file got from keeping
+the address beside the property is recovered as a check.
+
+Usage:  python validate.py [properties.yaml [modbus.yaml]]
 
 Exit status is 1 if anything is an error, 0 if only warnings.
 """
@@ -27,19 +29,37 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).parent
-SCHEMA = HERE / "device-profile.schema.json"
+PROPS_DOC = HERE / "device-properties.yaml"
+MODBUS_DOC = HERE / "device-modbus.yaml"
+PROPS_SCHEMA = HERE / "device-properties.schema.json"
+MODBUS_SCHEMA = HERE / "device-modbus.schema.json"
 
-# Words an expression may use that are not signal references. Provisional: the
-# expression grammar is DECISIONS.md D3 and still open, so this list and the
-# tokenizer below are a conservative approximation, not the real parser.
-EXPR_KEYWORDS = {
-    "and", "or", "not", "in", "any", "all",
-    "true", "false", "null",
-}
+# Words an expression may use that are not property references. Provisional:
+# the grammar is DECISIONS.md D3 and still open, so this list and the tokenizer
+# below are a conservative approximation, not the real parser.
+EXPR_KEYWORDS = {"and", "or", "not", "in", "any", "all", "true", "false", "null"}
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
-# Keys whose value is an expression, per D1.
 WHEN_KEYS = ("present_when", "valid_when", "writable_when", "effective_when", "when")
+
+# Which encoding can carry which semantic type. The point of D10's split is that
+# this is a many-to-many table, not an identity.
+ENCODINGS_FOR = {
+    "bool":  {"bit", "uint16", "int16"},
+    "int":   {"uint16", "int16", "uint32", "int32", "uint64", "int64"},
+    "real":  {"float32", "float64", "uint16", "int16", "uint32", "int32"},
+    "enum":  {"uint16", "uint32"},
+    "text":  {"chars"},
+}
+WIDTH_CAPACITY = {
+    "bool": (0, 1), "uint8": (0, 255), "int8": (-128, 127),
+    "uint16": (0, 65535), "int16": (-32768, 32767),
+    "uint32": (0, 4294967295), "int32": (-2147483648, 2147483647),
+    "uint64": (0, 18446744073709551615),
+    "int64": (-9223372036854775808, 9223372036854775807),
+}
+# How many registers one element of an encoding occupies.
+SPAN = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2,
+        "uint64": 4, "int64": 4, "float64": 4, "chars": 1}
 
 
 class Report:
@@ -74,22 +94,18 @@ def _key(k):
 
 
 def normalize(node):
-    """Stringify enum/flags keys before schema validation.
+    """Stringify enum and label keys before schema validation.
 
     YAML parses `0: none` as an integer key and `false: disabled` as a boolean
-    one. JSON has no such keys, and a JSON Schema `propertyNames` pattern only
-    constrains strings -- so left alone, the enum and label key rules silently
-    pass anything. Canonicalising here makes them enforceable and matches what
-    any JSON form of the profile will hold.
-
-    This changes key types only. Per D5 it may not, and does not, change which
-    signals exist, what they are called, or where they live.
+    one. JSON has neither, and a JSON Schema `propertyNames` pattern only
+    constrains strings -- so left alone, those key rules silently pass
+    anything. Canonicalising here makes them enforceable and matches what any
+    JSON form of the documents will hold. Key types only.
     """
     if isinstance(node, dict):
-        return {k: (
-            {_key(bk): bv for bk, bv in v.items()}
-            if k in ("enum", "labels") and isinstance(v, dict) else normalize(v)
-        ) for k, v in node.items()}
+        return {k: ({_key(bk): bv for bk, bv in v.items()}
+                    if k in ("enum", "labels") and isinstance(v, dict) else normalize(v))
+                for k, v in node.items()}
     if isinstance(node, list):
         return [normalize(v) for v in node]
     return node
@@ -104,21 +120,20 @@ def load_yaml(path: pathlib.Path):
         return yaml.safe_load(fh)
 
 
-def check_schema(doc, rep: Report) -> None:
+def check_schema(doc, schema_path: pathlib.Path, label: str, rep: Report) -> None:
     try:
         import jsonschema
     except ImportError:
         rep.warn("jsonschema not installed; skipped layer 1 (shape) entirely")
         return
-    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
     validator = jsonschema.Draft202012Validator(schema)
     for err in sorted(validator.iter_errors(normalize(doc)), key=lambda e: list(e.path)):
         where = "/".join(str(p) for p in err.path) or "(root)"
-        rep.error(f"{where}: {err.message}")
+        rep.error(f"{label}: {where}: {err.message}")
 
 
 def walk(node, path=()):
-    """Yield (path, key, value) for every mapping entry in the document."""
     if isinstance(node, dict):
         for k, v in node.items():
             yield path, k, v
@@ -131,127 +146,92 @@ def walk(node, path=()):
 def expression_identifiers(expr: str) -> set[str]:
     """Identifiers an expression mentions, minus keywords and attribute tails.
 
-    Approximate until the grammar is pinned down: it drops anything after a dot
-    so that channel[*].alarm_active contributes 'channel', and it cannot tell a
-    signal reference from an enum member name -- the caller resolves that.
+    Approximate until D3 pins the grammar down: it drops anything after a dot,
+    and cannot tell a property reference from a member name -- the caller
+    resolves that.
     """
     stripped = re.sub(r"\.[A-Za-z_][A-Za-z0-9_]*", "", expr)
     return {m.group(0) for m in IDENT_RE.finditer(stripped)} - EXPR_KEYWORDS
 
 
-def check_references(doc, rep: Report) -> None:
-    signals = doc.get("signals") or {}
-    procedures = doc.get("procedures") or {}
+def member_namespace(props):
+    members: dict[str, set[str]] = {}
+    for name, sig in props.items():
+        got = set((sig.get("enum") or {}).values())
+        got |= set((sig.get("labels") or {}).values())
+        for v in sig.get("variants") or []:
+            got |= set((v.get("enum") or {}).values())
+        if got:
+            members[name] = got
+    return members
 
-    enum_members: dict[str, set[str]] = {}
-    for name, sig in signals.items():
-        members = set((sig.get("enum") or {}).values())
-        members |= set((sig.get("labels") or {}).values())
-        for variant in sig.get("variants") or []:
-            members |= set((variant.get("enum") or {}).values())
-        if members:
-            enum_members[name] = members
+
+def property_expressions(sig):
+    exprs = [sig[k] for k in ("present_when", "valid_when", "writable_when") if k in sig]
+    exprs += [v[k] for v in sig.get("variants") or [] for k in WHEN_KEYS if k in v]
+    exprs += [c[k] for c in sig.get("constraints") or [] for k in WHEN_KEYS if k in c]
+    return exprs
+
+
+# ------------------------------------------------------------------ layer 2
+def check_references(doc, rep: Report) -> None:
+    props = doc.get("properties") or {}
+    procedures = doc.get("procedures") or {}
+    enum_members = member_namespace(props)
     all_members = {m for ms in enum_members.values() for m in ms}
 
-    def want_signal(ref, where):
-        if ref not in signals:
-            rep.error(f"{where}: signal '{ref}' is referenced but never declared")
+    def want(ref, where):
+        if ref not in props:
+            rep.error(f"{where}: property '{ref}' is referenced but never declared")
 
-    # -- explicit signal references ------------------------------------------
     for path, key, value in walk(doc):
         where = "/".join(str(p) for p in path + (key,))
-        if key in ("contains", "not_contains") and isinstance(value, str):
-            pass          # membership is checked against the signal's own flags below
-        elif key == "signal" and isinstance(value, str):
-            want_signal(value, where)
-        elif key == "read" and isinstance(value, str):
-            want_signal(value, where)
-        elif key == "enum_from" and isinstance(value, str):
-            want_signal(value, where)
-            if value in signals and value not in enum_members:
+        if key in ("property", "read", "enum_from") and isinstance(value, str):
+            want(value, where)
+            if key == "enum_from" and value in props and value not in enum_members:
                 rep.error(f"{where}: '{value}' has no enum to take values from")
         elif key == "reread" and isinstance(value, list):
             for ref in value:
-                want_signal(ref, where)
+                want(ref, where)
 
-    # -- identifiers inside expressions --------------------------------------
-    for path, key, value in walk(doc):
-        if key in WHEN_KEYS and isinstance(value, str):
-            where = "/".join(str(p) for p in path + (key,))
-            for ident in sorted(expression_identifiers(value)):
-                if ident not in signals and ident not in all_members:
-                    rep.error(
-                        f"{where}: '{ident}' in expression is neither a signal "
-                        f"nor an enum member of any signal"
-                    )
-    for name, proc in procedures.items():
+    def idents_ok(expr, where):
+        for ident in sorted(expression_identifiers(expr)):
+            if ident not in props and ident not in all_members:
+                rep.error(f"{where}: '{ident}' in expression is neither a property "
+                          f"nor a member of one")
+
+    for name, sig in props.items():
+        for expr in property_expressions(sig):
+            idents_ok(expr, f"properties/{name}")
+    for pname, proc in procedures.items():
         for i, expr in enumerate(proc.get("preconditions") or []):
-            for ident in sorted(expression_identifiers(expr)):
-                if ident not in signals and ident not in all_members:
-                    rep.error(
-                        f"procedures/{name}/preconditions/{i}: '{ident}' in "
-                        f"expression is neither a signal nor an enum member"
-                    )
+            idents_ok(expr, f"procedures/{pname}/preconditions/{i}")
 
-    # -- enum coverage -------------------------------------------------------
-    for name, sig in signals.items():
+    for name, sig in props.items():
         for group, entries in (("constraints", sig.get("constraints")),
-                              ("variants", sig.get("variants"))):
+                               ("variants", sig.get("variants"))):
             if not entries:
                 continue
             mentioned: dict[str, set[str]] = {}
             for entry in entries:
                 expr = entry.get("when") or entry.get("effective_when") or ""
                 idents = expression_identifiers(expr)
-                for selector in idents & set(enum_members):
-                    mentioned.setdefault(selector, set())
-                    mentioned[selector] |= idents & enum_members[selector]
-            for selector, covered in mentioned.items():
-                missing = enum_members[selector] - covered
+                for sel in idents & set(enum_members):
+                    mentioned.setdefault(sel, set())
+                    mentioned[sel] |= idents & enum_members[sel]
+            for sel, covered in mentioned.items():
+                missing = enum_members[sel] - covered
                 if missing:
-                    rep.warn(
-                        f"signals/{name}/{group}: no entry covers "
-                        f"{selector} == {', '.join(sorted(missing))}"
-                    )
+                    rep.warn(f"properties/{name}/{group}: no entry covers "
+                             f"{sel} == {', '.join(sorted(missing))}")
 
-
-def reverse_index(doc) -> dict[str, set[str]]:
-    """D1's derived index: selector signal -> signals whose behaviour depends on it."""
-    signals = doc.get("signals") or {}
-    index: dict[str, set[str]] = {}
-    for name, sig in signals.items():
-        exprs = [sig[k] for k in ("present_when", "valid_when", "writable_when") if k in sig]
-        exprs += [v["effective_when"] for v in sig.get("variants") or [] if "effective_when" in v]
-        exprs += [c["when"] for c in sig.get("constraints") or [] if "when" in c]
-        for expr in exprs:
-            for ident in expression_identifiers(expr):
-                if ident in signals and ident != name:
-                    index.setdefault(ident, set()).add(name)
-    return index
-
-
-# Which wire encodings can carry which semantic type (D10). The point of the
-# split is that this is a many-to-many table, not an identity.
-ENCODINGS_FOR = {
-    "bool":  {"bit", "uint16", "int16"},
-    "int":   {"uint16", "int16", "uint32", "int32", "uint64", "int64"},
-    "real":  {"float32", "float64", "uint16", "int16", "uint32", "int32"},
-    "enum":  {"uint16", "uint32"},
-    "text":  {"chars"},
-}
-
-# Inclusive raw range each width can hold.
-WIDTH_CAPACITY = {
-    "bool": (0, 1), "uint8": (0, 255), "int8": (-128, 127),
-    "uint16": (0, 65535), "int16": (-32768, 32767),
-    "uint32": (0, 4294967295), "int32": (-2147483648, 2147483647),
-    "uint64": (0, 18446744073709551615), "int64": (-9223372036854775808, 9223372036854775807),
-}
-INTEGER_WIDTHS = ["bool", "uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64"]
+    for name, sig in props.items():
+        if sig.get("kind") == "setting" and "default" not in sig:
+            rep.warn(f"properties/{name}: a setting with no default cannot be "
+                     f"factory-reset or offered a starting value")
 
 
 def raw_span(sig):
-    """The range expressed in raw (pre-scale) units, or None if there is no range."""
     if "range" not in sig:
         return None
     scale = sig.get("scale", 1) or 1
@@ -267,48 +247,14 @@ def narrowest_width(lo: float, hi: float):
     return None
 
 
-def check_types(doc, rep: Report) -> None:
-    """The semantic type / wire encoding / storage width triangle."""
-    for name, sig in (doc.get("signals") or {}).items():
+def check_storage(doc, encodings, rep: Report) -> None:
+    """Storage width, derived from range and checked against any declaration."""
+    for name, sig in (doc.get("properties") or {}).items():
         stype = sig.get("type")
         if stype is None:
-            continue                                   # schema already reported it
-
-        # -- semantic type vs wire encoding --------------------------------
-        binding = sig.get("binding")
-        if binding:
-            enc = binding.get("encoding")
-            if enc is None:
-                rep.error(f"signals/{name}/binding: no encoding given")
-            elif enc not in ENCODINGS_FOR.get(stype, set()):
-                rep.error(
-                    f"signals/{name}: type '{stype}' cannot be carried as '{enc}' "
-                    f"(allowed: {', '.join(sorted(ENCODINGS_FOR[stype]))})"
-                )
-            elif stype == "real" and enc not in ("float32", "float64") and "scale" not in sig:
-                rep.error(
-                    f"signals/{name}: a real carried as '{enc}' needs a scale, "
-                    f"or its fractional part is unrepresentable"
-                )
-            # does the range survive the wire?
-            span = raw_span(sig)
-            if span and enc in WIDTH_CAPACITY:
-                c = WIDTH_CAPACITY[enc]
-                if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
-                    rep.error(
-                        f"signals/{name}: range {sig['range']} is raw "
-                        f"{span[0]:.0f}..{span[1]:.0f} after scale, which does not fit "
-                        f"encoding '{enc}' ({c[0]}..{c[1]})"
-                    )
-            # does the enum fit?
-            if stype == "enum" and enc in WIDTH_CAPACITY:
-                top = max((int(v) for v in (sig.get("enum") or {})), default=0)
-                if top > WIDTH_CAPACITY[enc][1]:
-                    rep.error(f"signals/{name}: enum value {top} does not fit '{enc}'")
-
-        # -- storage width -------------------------------------------------
-        declared = sig.get("storage")
+            continue
         span = raw_span(sig)
+        declared = sig.get("storage")
         derived = None
         if stype == "bool":
             derived = "bool"
@@ -317,198 +263,191 @@ def check_types(doc, rep: Report) -> None:
             derived = narrowest_width(0, top)
         elif span:
             derived = narrowest_width(*span)
-        elif binding and binding.get("encoding") in WIDTH_CAPACITY:
-            derived = binding["encoding"]
+        elif encodings.get(name) in WIDTH_CAPACITY:
+            derived = encodings[name]
 
-        if declared:
-            if declared in WIDTH_CAPACITY and span:
-                c = WIDTH_CAPACITY[declared]
-                if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
-                    rep.error(
-                        f"signals/{name}: declared storage '{declared}' cannot hold "
-                        f"raw range {span[0]:.0f}..{span[1]:.0f}"
-                    )
-        elif derived is None and stype != "text":
-            rep.error(
-                f"signals/{name}: storage width is underivable -- give it a range, "
-                f"a binding encoding, or an explicit storage"
-            )
+        if declared and declared in WIDTH_CAPACITY and span:
+            c = WIDTH_CAPACITY[declared]
+            if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
+                rep.error(f"properties/{name}: declared storage '{declared}' cannot hold "
+                          f"raw range {span[0]:.0f}..{span[1]:.0f}")
+        elif not declared and derived is None and stype != "text":
+            rep.error(f"properties/{name}: storage width is underivable -- give it a "
+                      f"range, an encoding in the register map, or an explicit storage")
 
         if stype == "text" and "max_length" not in sig:
-            rep.error(f"signals/{name}: type 'text' needs max_length")
+            rep.error(f"properties/{name}: type 'text' needs max_length")
 
 
-def check_addresses(doc, rep: Report) -> None:
-    """Address collisions, bit collisions, and bitfield naming.
+def reverse_index(doc) -> dict[str, set[str]]:
+    """D1's derived index: selector property -> properties that depend on it."""
+    props = doc.get("properties") or {}
+    index: dict[str, set[str]] = {}
+    for name, sig in props.items():
+        for expr in property_expressions(sig):
+            for ident in expression_identifiers(expr):
+                if ident in props and ident != name:
+                    index.setdefault(ident, set()).add(name)
+    return index
 
-    These matter more since D11: a packed status register is no longer one
-    property with a bit map, it is N bool properties sharing an address. That
-    makes the address the grouping key -- and makes a mistyped address or a
-    repeated bit a silent, plausible hand-editing error (D5).
-    """
-    signals = doc.get("signals") or {}
-    whole: dict[tuple, str] = {}          # (table, addr) -> property owning the register
-    bits: dict[tuple, str] = {}           # (table, addr, bit) -> property
-    fields: dict[tuple, set] = {}         # (table, addr) -> bitfield names seen
 
-    for name in sorted(signals):
-        sig = signals[name]
-        binding = sig.get("binding")
-        if not binding:
+def check_reread_dependents(doc, index, rep: Report) -> None:
+    for name, sig in (doc.get("properties") or {}).items():
+        if (sig.get("on_write") or {}).get("reread") == "dependents" and not index.get(name):
+            rep.warn(f"properties/{name}/on_write/reread: 'dependents' resolves to "
+                     f"nothing -- no expression references {name}")
+
+
+# ------------------------------------------------------------------ layer 3
+def check_agreement(props_doc, modbus_doc, rep: Report):
+    """The two documents have to agree. Returns (encoding per property, on-bus set)."""
+    props = props_doc.get("properties") or {}
+    registers = modbus_doc.get("registers") or []
+
+    encodings: dict[str, str] = {}
+    owner: dict[str, str] = {}        # property -> where it is carried
+    whole: dict[tuple, str] = {}      # (space, address) -> what occupies it entirely
+    packed: dict[tuple, str] = {}     # (space, address) -> the register packing bits
+    bits: dict[tuple, str] = {}       # (space, address, bit) -> field
+
+    def claim(space, addr, what, at, kind):
+        key = (space, addr)
+        prior = whole.get(key) or packed.get(key)
+        if prior:
+            rep.error(f"{at}: {space} {addr} is already used by {prior}")
+        (whole if kind == "whole" else packed)[key] = what
+
+    for ri, reg in enumerate(registers):
+        space = reg.get("space")
+        at = f"registers/{ri}"
+
+        if reg.get("reserved"):
+            lo, hi = reg.get("from"), reg.get("to")
+            if lo is not None and hi is not None:
+                if hi < lo:
+                    rep.error(f"{at}: reserved range {lo}..{hi} runs backwards")
+                for a in range(lo, hi + 1):
+                    claim(space, a, f"a reserved range ({at})", at, "whole")
             continue
-        table = binding.get("space")
-        addr = binding.get("address")
-        if table is None or addr is None:
-            continue
-        if "bit" in binding:
-            key = (table, addr, binding["bit"])
-            if key in bits:
-                rep.error(
-                    f"signals/{name}: bit {binding['bit']} of {table} {addr} is already "
-                    f"taken by '{bits[key]}'"
-                )
-            else:
-                bits[key] = name
-            fields.setdefault((table, addr), set()).add(sig.get("bitfield"))
-        else:
-            key = (table, addr)
-            if key in whole:
-                rep.error(
-                    f"signals/{name}: {table} register {addr} is already used by "
-                    f"'{whole[key]}'"
-                )
-            else:
-                whole[key] = name
 
-    # a register cannot be both a packed bit field and a whole value
-    for (table, addr) in fields:
-        if (table, addr) in whole:
-            rep.error(
-                f"{table} register {addr} is used both as a whole value "
-                f"('{whole[(table, addr)]}') and as packed bits"
-            )
+        addr = reg.get("address")
+        fields = reg.get("fields") or []
+        if any("bit" in f for f in fields):
+            claim(space, addr, f"packed bits ({at})", at, "packed")
 
-    for (table, addr), names in sorted(fields.items()):
-        named = {n for n in names if n}
-        if len(named) > 1:
-            rep.error(
-                f"{table} register {addr}: its bits point at different packed "
-                f"registers ({', '.join(sorted(named))})"
-            )
-        if None in names and named:
-            rep.warn(
-                f"{table} register {addr}: some bits name a packed register and some "
-                f"do not"
-            )
+        for fi, field in enumerate(fields):
+            fat = f"{at}/fields/{fi}"
+            name = field.get("property")
+            if name not in props:
+                rep.error(f"{fat}: names property '{name}', which is not declared")
+                continue
+            if name in owner:
+                rep.error(f"{fat}: property '{name}' is already carried by {owner[name]}")
+                continue
+            owner[name] = fat
+            sig = props[name]
+            stype = sig.get("type")
 
-    # every bitfield reference resolves, and each packed register lives at one address
-    declared = doc.get("bitfields") or {}
-    where: dict[str, set] = {}
-    for name in sorted(signals):
-        sig = signals[name]
-        ref = sig.get("bitfield")
-        if ref is None:
-            continue
-        if ref not in declared:
-            rep.error(
-                f"signals/{name}/bitfield: '{ref}' is not declared in the bitfields "
-                f"section"
-            )
-            continue
-        b = sig.get("binding") or {}
-        if "space" in b and "address" in b:
-            where.setdefault(ref, set()).add((b["space"], b["address"]))
-    for ref, places in sorted(where.items()):
-        if len(places) > 1:
-            rep.error(
-                f"bitfields/{ref}: its bits are spread over more than one register "
-                f"({', '.join(f'{t} {a}' for t, a in sorted(places))})"
-            )
-    for ref in sorted(declared):
-        if ref not in where:
-            rep.warn(f"bitfields/{ref}: declared but no property references it")
+            if sig.get("internal"):
+                rep.error(f"{fat}: '{name}' is marked internal but a register carries it")
 
+            if "bit" in field:
+                key = (space, addr, field["bit"])
+                if key in bits:
+                    rep.error(f"{fat}: bit {field['bit']} of {space} {addr} is already "
+                              f"taken by {bits[key]}")
+                bits[key] = fat
+                encodings[name] = "bit"
+                if stype != "bool":
+                    rep.error(f"{fat}: '{name}' is type '{stype}', but only a bool can be "
+                              f"carried as a single bit")
+                continue
 
-def check_internal_properties(doc, rep: Report) -> None:
-    """Checks that exist because a property may have no Modbus binding (D8)."""
-    signals = doc.get("signals") or {}
-    on_bus = {n for n, s in signals.items() if "binding" in s}
+            enc = field.get("encoding")
+            encodings[name] = enc
+            span = SPAN.get(enc, 1) * field.get("count", 1)
+            for a in range(addr, addr + span):
+                claim(space, a, f"'{name}' ({fat})", fat, "whole")
 
-    # A bus client cannot evaluate a condition that names something it cannot
-    # read. So a property reachable over Modbus may only depend on properties
-    # that are also reachable. The reverse is fine: internal logic may look at
-    # anything.
+            if stype and enc not in ENCODINGS_FOR.get(stype, set()):
+                rep.error(f"{fat}: type '{stype}' cannot be carried as '{enc}' "
+                          f"(allowed: {', '.join(sorted(ENCODINGS_FOR[stype]))})")
+            elif stype == "real" and enc not in ("float32", "float64") and "scale" not in sig:
+                rep.error(f"{fat}: a real carried as '{enc}' needs a scale, or its "
+                          f"fractional part is unrepresentable")
+            rs = raw_span(sig)
+            if rs and enc in WIDTH_CAPACITY:
+                c = WIDTH_CAPACITY[enc]
+                if rs[0] < c[0] - 0.5 or rs[1] > c[1] + 0.5:
+                    rep.error(f"{fat}: range {sig['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
+                              f"after scale, which does not fit '{enc}' ({c[0]}..{c[1]})")
+            if stype == "enum" and enc in WIDTH_CAPACITY:
+                top = max((int(v) for v in (sig.get("enum") or {})), default=0)
+                if top > WIDTH_CAPACITY[enc][1]:
+                    rep.error(f"{fat}: enum value {top} does not fit '{enc}'")
+
+        declared = reg.get("access")
+        if declared:
+            kinds = {props[f["property"]].get("access", "read_write")
+                     for f in fields if f.get("property") in props}
+            if len(kinds) == 1 and declared not in kinds:
+                rep.warn(f"{at}: register access '{declared}' disagrees with its "
+                         f"properties' access '{kinds.pop()}'")
+
+    for name, sig in props.items():
+        if not sig.get("internal") and name not in owner:
+            rep.error(f"properties/{name}: carried by no register and not marked internal "
+                      f"-- it would silently vanish from the register map")
+
+    on_bus = set(owner)
+
     for name in sorted(on_bus):
-        sig = signals[name]
-        exprs = [sig[k] for k in ("present_when", "valid_when", "writable_when") if k in sig]
-        exprs += [v[k] for v in sig.get("variants") or [] for k in WHEN_KEYS if k in v]
-        exprs += [c[k] for c in sig.get("constraints") or [] for k in WHEN_KEYS if k in c]
-        for expr in exprs:
+        for expr in property_expressions(props[name]):
             for ident in sorted(expression_identifiers(expr)):
-                if ident in signals and ident not in on_bus:
-                    rep.error(
-                        f"signals/{name}: condition references '{ident}', which has no "
-                        f"Modbus binding -- a bus client cannot read it, so it cannot "
-                        f"evaluate this condition"
-                    )
+                if ident in props and ident not in on_bus:
+                    rep.error(f"properties/{name}: condition references '{ident}', which "
+                              f"no register carries -- a client cannot evaluate it")
 
-    # Procedures run over the bus.
-    for pname, proc in (doc.get("procedures") or {}).items():
+    for pname, proc in (props_doc.get("procedures") or {}).items():
         steps = list(proc.get("steps") or []) + list(proc.get("on_failure") or [])
         for i, step in enumerate(steps):
             targets = []
             for verb in ("write", "read"):
-                if isinstance(step.get(verb), dict) and "signal" in step[verb]:
-                    targets.append(step[verb]["signal"])
-            if isinstance(step.get("await"), dict) and "signal" in step["await"]:
-                targets.append(step["await"]["signal"])
+                if isinstance(step.get(verb), dict) and "property" in step[verb]:
+                    targets.append(step[verb]["property"])
+            if isinstance(step.get("await"), dict) and "property" in step["await"]:
+                targets.append(step["await"]["property"])
             targets += list(step.get("reread") or [])
             if isinstance(step.get("verify"), dict) and "read" in step["verify"]:
                 targets.append(step["verify"]["read"])
             for ref in targets:
-                if ref in signals and ref not in on_bus:
-                    rep.error(
-                        f"procedures/{pname}/steps/{i}: targets '{ref}', which has no "
-                        f"Modbus binding and so cannot be reached by a procedure"
-                    )
+                if ref in props and ref not in on_bus:
+                    rep.error(f"procedures/{pname}/steps/{i}: targets '{ref}', which no "
+                              f"register carries, so a procedure cannot reach it")
 
-    for name, sig in signals.items():
-        if sig.get("kind") == "setting" and "default" not in sig:
-            rep.warn(
-                f"signals/{name}: a setting with no default cannot be factory-reset "
-                f"or offered a starting value"
-            )
-
-
-def check_reread_dependents(doc, index, rep: Report) -> None:
-    for name, sig in (doc.get("signals") or {}).items():
-        on_write = sig.get("on_write") or {}
-        if on_write.get("reread") == "dependents" and not index.get(name):
-            rep.warn(
-                f"signals/{name}/on_write/reread: 'dependents' resolves to nothing "
-                f"-- no expression anywhere references {name}, so writing it "
-                f"re-reads no registers"
-            )
+    return encodings, on_bus
 
 
 def main(argv: list[str]) -> int:
-    path = pathlib.Path(argv[1]) if len(argv) > 1 else HERE / "device-profile.yaml"
-    doc = load_yaml(path)
+    props_path = pathlib.Path(argv[1]) if len(argv) > 1 else PROPS_DOC
+    modbus_path = pathlib.Path(argv[2]) if len(argv) > 2 else MODBUS_DOC
+    props_doc = load_yaml(props_path)
+    modbus_doc = load_yaml(modbus_path)
     rep = Report()
 
-    check_schema(doc, rep)
-    check_references(doc, rep)
-    check_types(doc, rep)
-    check_addresses(doc, rep)
-    check_internal_properties(doc, rep)
-    index = reverse_index(doc)
-    check_reread_dependents(doc, index, rep)
+    check_schema(props_doc, PROPS_SCHEMA, props_path.name, rep)
+    check_schema(modbus_doc, MODBUS_SCHEMA, modbus_path.name, rep)
+    check_references(props_doc, rep)
+    encodings, _ = check_agreement(props_doc, modbus_doc, rep)
+    check_storage(props_doc, encodings, rep)
+    index = reverse_index(props_doc)
+    check_reread_dependents(props_doc, index, rep)
 
-    print(f"-- derived reverse index ({path.name})")
+    print(f"-- derived reverse index ({props_path.name})")
     if not index:
         print("   (empty)")
-    for selector in sorted(index):
-        print(f"   {selector} -> {', '.join(sorted(index[selector]))}")
+    for sel in sorted(index):
+        print(f"   {sel} -> {', '.join(sorted(index[sel]))}")
     print()
 
     return rep.print()

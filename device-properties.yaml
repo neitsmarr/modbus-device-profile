@@ -1,4 +1,7 @@
-# yaml-language-server: $schema=device-profile.schema.json
+# yaml-language-server: $schema=device-properties.schema.json
+#
+# SEMANTIC LAYER: what the device's properties mean. No addresses -- the
+# Modbus register map is device-modbus.yaml, and it references these by name.
 #
 # Residential air handling unit: two air chains, one EC fan per chain, up to
 # three I2C sensor channels per chain, one auxiliary digital input per chain,
@@ -6,18 +9,15 @@
 #
 # Naming and value conventions follow the company device library
 # (3SModbus/DeviceLibrary): '<Measurand> Level', '<Measurand> Correction
-# Value', 'Minimum/Maximum Output Value', 'Sensor State' as a bit field,
-# 'Alerts' as OK / Yellow / Red, and the HR1-HR10 common block.
+# Value', 'Minimum/Maximum Output Value', 'Alerts' as OK / Yellow / Red, and
+# the HR1-HR10 common block.
 #
 # ASSUMPTIONS, all needing confirmation against firmware:
-#   - every address below is invented; only the layout style is borrowed
-#   - address blocks: HR1-19 interfaces, HR21-39 unit, HR101-155 chains,
-#     HR201-330 sensor channels (20 apart), HR990 reset; IR mirrors it
-#   - bypass, preheater/reheater, heat-recovery and filter monitoring are
-#     NOT modelled: they were not in the hardware list, though a residential
-#     AHU normally has them
+#   - a reheater is not modelled; only the pre-heater was confirmed
 #   - the client interface is modelled as configuration only; the polled
-#     remote registers it reads are a separate profile, not this one
+#     remote registers it reads are a separate device's profile, not this one
+#   - the two internal properties are illustrative; the real list of
+#     unexposed settings has to come from the firmware author
 
 device:
   name: "AHU-1"
@@ -25,140 +25,7 @@ device:
   type: 4010                  # placeholder series id
   firmware_version: "1.0"
 
-access:
-  supported_fc: [3, 4, 6, 16]
-  max_read_words: 32
-  max_write_words: 16
-  gaps_readable: true         # ASSUMPTION: blocks span unmapped addresses safely
-  turnaround_ms: 5
-
-bitfields:
-
-  # A packed register is not a property -- each of its bits is (D11). It is
-  # still a named thing the register map documents, so it is declared once
-  # here and referenced by its bits. Its address is NOT repeated: it is
-  # derived from the bits that point at it, and they must agree.
-
-  device_status_errors:
-    title: "Device Status - Errors"
-    description: >-
-      Fault conditions that stop normal operation. Any bit set here is
-      reflected in application_state.
-
-  device_status_warnings:
-    title: "Device Status - Warnings"
-    description: >-
-      Conditions that degrade operation or need attention but do not stop
-      ventilation.
-
-  preheater_state:
-    title: "Pre-heater State"
-    description: >-
-      Pre-heater diagnostics. Meaningful only on units where the pre-heater
-      option is fitted.
-
-  bypass_state:
-    title: "Bypass State"
-    description: >-
-      Bypass damper diagnostics, including the two conditions under which the
-      unit holds the damper closed regardless of the control mode.
-
-  filter_state:
-    title: "Filter State"
-    description: >-
-      Filter condition as judged by the selected monitoring mode.
-
-  supply_fan_state:
-    title: "Supply Fan State"
-    description: >-
-      Fault and diagnostic bits for the supply fan channel, whichever control
-      source is selected.
-
-  extract_fan_state:
-    title: "Extract Fan State"
-    description: >-
-      Fault and diagnostic bits for the extract fan channel, whichever control
-      source is selected.
-
-  supply_ch1_sensor_capability:
-    title: "Supply Channel 1 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 1 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  supply_ch1_sensor_state:
-    title: "Supply Channel 1 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 1. Its readings are
-      only trustworthy while none of these bits is set.
-
-  supply_ch2_sensor_capability:
-    title: "Supply Channel 2 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 2 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  supply_ch2_sensor_state:
-    title: "Supply Channel 2 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 2. Its readings are
-      only trustworthy while none of these bits is set.
-
-  supply_ch3_sensor_capability:
-    title: "Supply Channel 3 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 3 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  supply_ch3_sensor_state:
-    title: "Supply Channel 3 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 3. Its readings are
-      only trustworthy while none of these bits is set.
-
-  extract_ch1_sensor_capability:
-    title: "Extract Channel 1 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 1 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  extract_ch1_sensor_state:
-    title: "Extract Channel 1 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 1. Its readings are
-      only trustworthy while none of these bits is set.
-
-  extract_ch2_sensor_capability:
-    title: "Extract Channel 2 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 2 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  extract_ch2_sensor_state:
-    title: "Extract Channel 2 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 2. Its readings are
-      only trustworthy while none of these bits is set.
-
-  extract_ch3_sensor_capability:
-    title: "Extract Channel 3 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 3 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-
-  extract_ch3_sensor_state:
-    title: "Extract Channel 3 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 3. Its readings are
-      only trustworthy while none of these bits is set.
-
-signals:
+properties:
 
   # ---------------------------------------------------------------------
   # Modbus server interface and device identity (HR1-HR10 common block)
@@ -168,7 +35,6 @@ signals:
     title: "Device Slave Address"
     kind: setting
     type: int
-    binding: { space: holding, address: 1, encoding: uint16 }
     range: [1, 247]
     default: 1
 
@@ -176,7 +42,6 @@ signals:
     title: "Modbus Baud Rate"
     kind: setting
     type: enum
-    binding: { space: holding, address: 2, encoding: uint16 }
     unit: "bps"
     enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
     default: b19200
@@ -185,7 +50,6 @@ signals:
     title: "Modbus Parity"
     kind: setting
     type: enum
-    binding: { space: holding, address: 3, encoding: uint16 }
     enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
     default: even_8e1
 
@@ -193,7 +57,6 @@ signals:
     title: "Device Type"
     kind: measurement
     type: int
-    binding: { space: holding, address: 4, encoding: uint16 }
     access: read_only
 
   hardware_version:
@@ -201,7 +64,6 @@ signals:
     kind: measurement
     type: int
     display: version
-    binding: { space: holding, address: 5, encoding: uint16 }
     access: read_only
     # packed BCD-style bytes in the library format; see the open formatting
     # question in DECISIONS.md D6
@@ -211,14 +73,12 @@ signals:
     kind: measurement
     type: int
     display: version
-    binding: { space: holding, address: 6, encoding: uint16 }
     access: read_only
 
   server_termination_resistor:
     title: "Network Bus Termination Resistor"
     kind: setting
     type: bool
-    binding: { space: holding, address: 9, encoding: uint16 }
     labels: { false: disconnected, true: connected }
     default: disconnected
 
@@ -226,7 +86,6 @@ signals:
     title: "Modbus Registers Reset"
     kind: command
     type: bool
-    binding: { space: holding, address: 10, encoding: uint16 }
     access: write_only
     labels: { false: idle, true: reset }
     default: idle
@@ -239,7 +98,6 @@ signals:
     title: "Client Interface Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 11, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: disabled
     on_write:
@@ -250,7 +108,6 @@ signals:
     title: "Client Baud Rate"
     kind: setting
     type: enum
-    binding: { space: holding, address: 12, encoding: uint16 }
     unit: "bps"
     enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
     default: b19200
@@ -260,7 +117,6 @@ signals:
     title: "Client Parity"
     kind: setting
     type: enum
-    binding: { space: holding, address: 13, encoding: uint16 }
     enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
     default: even_8e1
     present_when: client_enable == enabled
@@ -269,7 +125,6 @@ signals:
     title: "Client Poll Interval"
     kind: setting
     type: int
-    binding: { space: holding, address: 14, encoding: uint16 }
     unit: "ms"
     range: [100, 10000]
     step: 100
@@ -280,7 +135,6 @@ signals:
     title: "Client Response Timeout"
     kind: setting
     type: int
-    binding: { space: holding, address: 15, encoding: uint16 }
     unit: "ms"
     range: [50, 5000]
     default: 500
@@ -290,7 +144,6 @@ signals:
     title: "Client Retry Count"
     kind: setting
     type: int
-    binding: { space: holding, address: 16, encoding: uint16 }
     range: [0, 5]
     default: 2
     present_when: client_enable == enabled
@@ -299,7 +152,6 @@ signals:
     title: "Client Interface State"
     kind: measurement
     type: enum
-    binding: { space: input, address: 11, encoding: uint16 }
     access: read_only
     enum: { 0: idle, 1: polling, 2: degraded, 3: bus_fault }
     valid_when: client_enable == enabled
@@ -312,7 +164,6 @@ signals:
     title: "Left-Right Swap"
     kind: setting
     type: bool
-    binding: { space: holding, address: 21, encoding: uint16 }
     labels: { false: normal, true: swapped }
     default: normal
     description: >-
@@ -329,7 +180,6 @@ signals:
     title: "Operating Mode"
     kind: setting
     type: enum
-    binding: { space: holding, address: 22, encoding: uint16 }
     enum: { 0: standby, 1: manual, 2: automatic, 3: boost, 4: away }
     default: automatic
     on_write:
@@ -340,7 +190,6 @@ signals:
     title: "Ventilation Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 23, encoding: uint16 }
     unit: "%"
     range: [0, 100]
     step: 5
@@ -351,7 +200,6 @@ signals:
     title: "Carbon Dioxide Setpoint"
     kind: setting
     type: int
-    binding: { space: holding, address: 24, encoding: uint16 }
     unit: "ppm"
     range: [600, 1500]
     step: 50
@@ -362,7 +210,6 @@ signals:
     title: "Relative Humidity Setpoint"
     kind: setting
     type: int
-    binding: { space: holding, address: 25, encoding: uint16 }
     unit: "%RH"
     range: [30, 70]
     default: 55
@@ -372,7 +219,6 @@ signals:
     title: "Modbus Safety Timeout"
     kind: setting
     type: int
-    binding: { space: holding, address: 26, encoding: uint16 }
     unit: "minutes"
     range: [0, 240]
     default: 0
@@ -385,7 +231,6 @@ signals:
     title: "Sensor Bus Rescan"
     kind: command
     type: bool
-    binding: { space: holding, address: 27, encoding: uint16 }
     access: write_only
     labels: { false: idle, true: rescan }
     default: idle
@@ -394,7 +239,6 @@ signals:
     title: "Sensor Bus State"
     kind: measurement
     type: enum
-    binding: { space: input, address: 13, encoding: uint16 }
     access: read_only
     enum: { 0: idle, 1: scanning, 2: complete, 3: failed }
 
@@ -403,118 +247,89 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 0 }
-    bitfield: device_status_errors
 
   error_internal_voltage_fault:
     title: "Device Status - Errors: Internal Voltage Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 1 }
-    bitfield: device_status_errors
 
   error_memory_fault:
     title: "Device Status - Errors: Memory Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 2 }
-    bitfield: device_status_errors
 
   error_supply_fan_fault:
     title: "Device Status - Errors: Supply Fan Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 3 }
-    bitfield: device_status_errors
 
   error_extract_fan_fault:
     title: "Device Status - Errors: Extract Fan Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 4 }
-    bitfield: device_status_errors
 
   error_sensor_bus_fault:
     title: "Device Status - Errors: Sensor Bus Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 5 }
-    bitfield: device_status_errors
 
   error_preheater_fault:
     title: "Device Status - Errors: Preheater Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 6 }
-    bitfield: device_status_errors
 
   error_bypass_fault:
     title: "Device Status - Errors: Bypass Fault"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 1, encoding: bit, bit: 7 }
-    bitfield: device_status_errors
 
   warning_supply_voltage_warning:
     title: "Device Status - Warnings: Supply Voltage Warning"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 0 }
-    bitfield: device_status_warnings
 
   warning_internal_voltage_warning:
     title: "Device Status - Warnings: Internal Voltage Warning"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 1 }
-    bitfield: device_status_warnings
 
   warning_sensor_replacement_due:
     title: "Device Status - Warnings: Sensor Replacement Due"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 2 }
-    bitfield: device_status_warnings
 
   warning_client_interface_degraded:
     title: "Device Status - Warnings: Client Interface Degraded"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 3 }
-    bitfield: device_status_warnings
 
   warning_filter_replacement_due:
     title: "Device Status - Warnings: Filter Replacement Due"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 4 }
-    bitfield: device_status_warnings
 
   warning_efficiency_below_expected:
     title: "Device Status - Warnings: Efficiency Below Expected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 2, encoding: bit, bit: 5 }
-    bitfield: device_status_warnings
 
   supply_voltage:
     title: "Supply Voltage"
     kind: measurement
     type: real
-    binding: { space: input, address: 3, encoding: uint16 }
     access: read_only
     unit: "VDC"
     scale: 0.1
@@ -524,7 +339,6 @@ signals:
     title: "Application State"
     kind: measurement
     type: enum
-    binding: { space: input, address: 12, encoding: uint16 }
     access: read_only
     enum: { 0: idle, 1: ventilating, 2: boosting, 3: away, 4: fault }
 
@@ -541,7 +355,6 @@ signals:
     title: "Outdoor Air Temperature Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 31, encoding: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
     # A commissioning tool should also check the named channel actually
@@ -554,7 +367,6 @@ signals:
     title: "Supply Air Temperature Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 32, encoding: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
     # A commissioning tool should also check the named channel actually
@@ -567,7 +379,6 @@ signals:
     title: "Extract Air Temperature Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 33, encoding: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
     # A commissioning tool should also check the named channel actually
@@ -580,7 +391,6 @@ signals:
     title: "Exhaust Air Temperature Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 34, encoding: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
     # A commissioning tool should also check the named channel actually
@@ -593,7 +403,6 @@ signals:
     title: "Outdoor Air Temperature"
     kind: measurement
     type: real
-    binding: { space: input, address: 21, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -604,7 +413,6 @@ signals:
     title: "Supply Air Temperature"
     kind: measurement
     type: real
-    binding: { space: input, address: 22, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -615,7 +423,6 @@ signals:
     title: "Extract Air Temperature"
     kind: measurement
     type: real
-    binding: { space: input, address: 23, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -626,7 +433,6 @@ signals:
     title: "Exhaust Air Temperature"
     kind: measurement
     type: real
-    binding: { space: input, address: 24, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -637,7 +443,6 @@ signals:
     title: "Heat Recovery Efficiency"
     kind: measurement
     type: int
-    binding: { space: input, address: 25, encoding: uint16 }
     access: read_only
     unit: "%"
     range: [0, 100]
@@ -659,7 +464,6 @@ signals:
     title: "Pre-heater Installed"
     kind: setting
     type: bool
-    binding: { space: holding, address: 41, encoding: uint16 }
     labels: { false: not_installed, true: installed }
     default: not_installed
     description: >-
@@ -674,7 +478,6 @@ signals:
     title: "Pre-heater Control Mode"
     kind: setting
     type: enum
-    binding: { space: holding, address: 42, encoding: uint16 }
     enum: { 0: disabled, 1: frost_protection, 2: supply_temperature }
     default: frost_protection
     present_when: preheater_installed == installed
@@ -685,7 +488,6 @@ signals:
     title: "Pre-heater Output Type"
     kind: setting
     type: enum
-    binding: { space: holding, address: 43, encoding: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
     present_when: preheater_installed == installed
@@ -694,7 +496,6 @@ signals:
     title: "Pre-heater Minimum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 44, encoding: uint16 }
     unit: "%"
     range: [0, 50]
     default: 0
@@ -704,7 +505,6 @@ signals:
     title: "Pre-heater Maximum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 45, encoding: uint16 }
     unit: "%"
     range: [50, 100]
     default: 100
@@ -714,7 +514,6 @@ signals:
     title: "Pre-heater Frost Protection Setpoint"
     kind: setting
     type: real
-    binding: { space: holding, address: 46, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -726,7 +525,6 @@ signals:
     title: "Pre-heater Supply Temperature Setpoint"
     kind: setting
     type: real
-    binding: { space: holding, address: 47, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -738,7 +536,6 @@ signals:
     title: "Pre-heater Output Value"
     kind: measurement
     type: int
-    binding: { space: input, address: 31, encoding: uint16 }
     access: read_only
     unit: "%"
     range: [0, 100]
@@ -749,8 +546,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 32, encoding: bit, bit: 0 }
-    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_thermal_cutout_open:
@@ -758,8 +553,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 32, encoding: bit, bit: 1 }
-    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_output_saturated:
@@ -767,8 +560,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 32, encoding: bit, bit: 2 }
-    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_frost_protection_active:
@@ -776,8 +567,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 32, encoding: bit, bit: 3 }
-    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   # ---------------------------------------------------------------------
@@ -788,7 +577,6 @@ signals:
     title: "Bypass Control Mode"
     kind: setting
     type: enum
-    binding: { space: holding, address: 51, encoding: uint16 }
     enum: { 0: disabled, 1: automatic, 2: manual }
     default: automatic
     on_write:
@@ -799,7 +587,6 @@ signals:
     title: "Bypass Output Type"
     kind: setting
     type: enum
-    binding: { space: holding, address: 52, encoding: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
     present_when: bypass_control_mode != disabled
@@ -808,7 +595,6 @@ signals:
     title: "Bypass Minimum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 53, encoding: uint16 }
     unit: "%"
     range: [0, 40]
     default: 0
@@ -821,7 +607,6 @@ signals:
     title: "Bypass Maximum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 54, encoding: uint16 }
     unit: "%"
     range: [60, 100]
     default: 100
@@ -831,7 +616,6 @@ signals:
     title: "Bypass Outdoor Temperature Threshold"
     kind: setting
     type: real
-    binding: { space: holding, address: 55, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -843,7 +627,6 @@ signals:
     title: "Bypass Extract Temperature Threshold"
     kind: setting
     type: real
-    binding: { space: holding, address: 56, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -855,7 +638,6 @@ signals:
     title: "Bypass Manual Position"
     kind: setting
     type: int
-    binding: { space: holding, address: 57, encoding: uint16 }
     unit: "%"
     range: [0, 100]
     step: 5
@@ -866,7 +648,6 @@ signals:
     title: "Bypass Position"
     kind: measurement
     type: int
-    binding: { space: input, address: 41, encoding: uint16 }
     access: read_only
     unit: "%"
     range: [0, 100]
@@ -877,8 +658,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 42, encoding: bit, bit: 0 }
-    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_position_feedback_missing:
@@ -886,8 +665,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 42, encoding: bit, bit: 1 }
-    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_held_closed_by_frost_protection:
@@ -895,8 +672,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 42, encoding: bit, bit: 2 }
-    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_held_closed_by_missing_temperature:
@@ -904,8 +679,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 42, encoding: bit, bit: 3 }
-    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   # ---------------------------------------------------------------------
@@ -923,7 +696,6 @@ signals:
     title: "Filter Monitoring Mode"
     kind: setting
     type: enum
-    binding: { space: holding, address: 61, encoding: uint16 }
     enum: { 0: disabled, 1: elapsed_time, 2: differential_pressure }
     default: elapsed_time
     on_write:
@@ -934,7 +706,6 @@ signals:
     title: "Filter Replacement Interval"
     kind: setting
     type: int
-    binding: { space: holding, address: 62, encoding: uint16 }
     unit: "days"
     range: [30, 365]
     default: 90
@@ -944,7 +715,6 @@ signals:
     title: "Filter Differential Pressure Threshold"
     kind: setting
     type: int
-    binding: { space: holding, address: 63, encoding: uint16 }
     unit: "Pa"
     range: [50, 500]
     default: 200
@@ -954,7 +724,6 @@ signals:
     title: "Filter Elapsed Time"
     kind: measurement
     type: int
-    binding: { space: input, address: 51, encoding: uint16 }
     access: read_only
     unit: "days"
     range: [0, 999]
@@ -964,7 +733,6 @@ signals:
     title: "Filter Differential Pressure"
     kind: measurement
     type: int
-    binding: { space: input, address: 52, encoding: uint16 }
     access: read_only
     unit: "Pa"
     range: [0, 1000]
@@ -975,8 +743,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 53, encoding: bit, bit: 0 }
-    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_replacement_overdue:
@@ -984,8 +750,6 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 53, encoding: bit, bit: 1 }
-    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_pressure_sensor_fault:
@@ -993,15 +757,12 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 53, encoding: bit, bit: 2 }
-    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_counter_reset:
     title: "Filter Counter Reset"
     kind: command
     type: bool
-    binding: { space: holding, address: 64, encoding: uint16 }
     access: write_only
     labels: { false: idle, true: reset }
     default: idle
@@ -1015,7 +776,6 @@ signals:
     title: "Supply Fan Control Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 101, encoding: uint16 }
     enum: { 0: analog_output, 1: modbus }
     default: analog_output
     on_write:
@@ -1026,7 +786,6 @@ signals:
     title: "Supply Fan Analog Output Type"
     kind: setting
     type: enum
-    binding: { space: holding, address: 102, encoding: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
     present_when: supply_fan_control_source == analog_output
@@ -1035,7 +794,6 @@ signals:
     title: "Supply Fan Minimum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 103, encoding: uint16 }
     unit: "%"
     range: [20, 60]
     default: 30
@@ -1044,7 +802,6 @@ signals:
     title: "Supply Fan Maximum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 104, encoding: uint16 }
     unit: "%"
     range: [60, 100]
     default: 100
@@ -1053,7 +810,6 @@ signals:
     title: "Supply Fan Start Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 105, encoding: uint16 }
     unit: "%"
     range: [20, 100]
     default: 50
@@ -1062,7 +818,6 @@ signals:
     title: "Supply Fan Kickstart Control"
     kind: setting
     type: enum
-    binding: { space: holding, address: 106, encoding: uint16 }
     enum: { 0: softstart, 1: kickstart }
     default: softstart
 
@@ -1070,7 +825,6 @@ signals:
     title: "Supply Fan Kickstart Time"
     kind: setting
     type: int
-    binding: { space: holding, address: 107, encoding: uint16 }
     unit: "seconds"
     range: [2, 10]
     default: 5
@@ -1080,7 +834,6 @@ signals:
     title: "Supply Fan Modbus Slave Address"
     kind: setting
     type: int
-    binding: { space: holding, address: 108, encoding: uint16 }
     range: [1, 247]
     default: 1
     present_when: supply_fan_control_source == modbus
@@ -1089,7 +842,6 @@ signals:
     title: "Supply Fan Modbus Speed Register"
     kind: setting
     type: int
-    binding: { space: holding, address: 109, encoding: uint16 }
     range: [1, 65535]
     present_when: supply_fan_control_source == modbus
 
@@ -1097,7 +849,6 @@ signals:
     title: "Supply Fan Overwrite Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 110, encoding: uint16 }
     labels: { false: automatic, true: overwrite }
     default: automatic
     on_write:
@@ -1107,7 +858,6 @@ signals:
     title: "Supply Fan Overwrite Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 111, encoding: uint16 }
     unit: "%"
     range: [0, 100]
     default: 50
@@ -1117,7 +867,6 @@ signals:
     title: "Supply Digital Input Function"
     kind: setting
     type: enum
-    binding: { space: holding, address: 116, encoding: uint16 }
     enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
     default: disabled
     on_write:
@@ -1127,7 +876,6 @@ signals:
     title: "Supply Digital Input Polarity"
     kind: setting
     type: bool
-    binding: { space: holding, address: 117, encoding: uint16 }
     labels: { false: normally_open, true: normally_closed }
     default: normally_open
     present_when: supply_digital_input_function != disabled
@@ -1136,7 +884,6 @@ signals:
     title: "Supply Fan Output Value"
     kind: measurement
     type: int
-    binding: { space: input, address: 101, encoding: uint16 }
     access: read_only
     unit: "%"
     range: [0, 100]
@@ -1145,7 +892,6 @@ signals:
     title: "Supply Fan Speed"
     kind: measurement
     type: int
-    binding: { space: input, address: 102, encoding: uint16 }
     access: read_only
     unit: "rpm"
     range: [0, 5000]
@@ -1155,38 +901,29 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 103, encoding: bit, bit: 0 }
-    bitfield: supply_fan_state
 
   supply_fan_tacho_missing:
     title: "Supply Fan State: Tacho Missing"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 103, encoding: bit, bit: 1 }
-    bitfield: supply_fan_state
 
   supply_fan_modbus_timeout:
     title: "Supply Fan State: Modbus Timeout"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 103, encoding: bit, bit: 2 }
-    bitfield: supply_fan_state
 
   supply_fan_blocked_rotor:
     title: "Supply Fan State: Blocked Rotor"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 103, encoding: bit, bit: 3 }
-    bitfield: supply_fan_state
 
   supply_digital_input_state:
     title: "Supply Digital Input State"
     kind: measurement
     type: bool
-    binding: { space: input, address: 104, encoding: uint16 }
     access: read_only
     labels: { false: low, true: high }
     valid_when: supply_digital_input_function != disabled
@@ -1199,7 +936,6 @@ signals:
     title: "Extract Fan Control Source"
     kind: setting
     type: enum
-    binding: { space: holding, address: 131, encoding: uint16 }
     enum: { 0: analog_output, 1: modbus }
     default: analog_output
     on_write:
@@ -1210,7 +946,6 @@ signals:
     title: "Extract Fan Analog Output Type"
     kind: setting
     type: enum
-    binding: { space: holding, address: 132, encoding: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
     present_when: extract_fan_control_source == analog_output
@@ -1219,7 +954,6 @@ signals:
     title: "Extract Fan Minimum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 133, encoding: uint16 }
     unit: "%"
     range: [20, 60]
     default: 30
@@ -1228,7 +962,6 @@ signals:
     title: "Extract Fan Maximum Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 134, encoding: uint16 }
     unit: "%"
     range: [60, 100]
     default: 100
@@ -1237,7 +970,6 @@ signals:
     title: "Extract Fan Start Output Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 135, encoding: uint16 }
     unit: "%"
     range: [20, 100]
     default: 50
@@ -1246,7 +978,6 @@ signals:
     title: "Extract Fan Kickstart Control"
     kind: setting
     type: enum
-    binding: { space: holding, address: 136, encoding: uint16 }
     enum: { 0: softstart, 1: kickstart }
     default: softstart
 
@@ -1254,7 +985,6 @@ signals:
     title: "Extract Fan Kickstart Time"
     kind: setting
     type: int
-    binding: { space: holding, address: 137, encoding: uint16 }
     unit: "seconds"
     range: [2, 10]
     default: 5
@@ -1264,7 +994,6 @@ signals:
     title: "Extract Fan Modbus Slave Address"
     kind: setting
     type: int
-    binding: { space: holding, address: 138, encoding: uint16 }
     range: [1, 247]
     default: 1
     present_when: extract_fan_control_source == modbus
@@ -1273,7 +1002,6 @@ signals:
     title: "Extract Fan Modbus Speed Register"
     kind: setting
     type: int
-    binding: { space: holding, address: 139, encoding: uint16 }
     range: [1, 65535]
     present_when: extract_fan_control_source == modbus
 
@@ -1281,7 +1009,6 @@ signals:
     title: "Extract Fan Overwrite Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 140, encoding: uint16 }
     labels: { false: automatic, true: overwrite }
     default: automatic
     on_write:
@@ -1291,7 +1018,6 @@ signals:
     title: "Extract Fan Overwrite Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 141, encoding: uint16 }
     unit: "%"
     range: [0, 100]
     default: 50
@@ -1301,7 +1027,6 @@ signals:
     title: "Extract Digital Input Function"
     kind: setting
     type: enum
-    binding: { space: holding, address: 146, encoding: uint16 }
     enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
     default: disabled
     on_write:
@@ -1311,7 +1036,6 @@ signals:
     title: "Extract Digital Input Polarity"
     kind: setting
     type: bool
-    binding: { space: holding, address: 147, encoding: uint16 }
     labels: { false: normally_open, true: normally_closed }
     default: normally_open
     present_when: extract_digital_input_function != disabled
@@ -1320,7 +1044,6 @@ signals:
     title: "Extract Fan Output Value"
     kind: measurement
     type: int
-    binding: { space: input, address: 131, encoding: uint16 }
     access: read_only
     unit: "%"
     range: [0, 100]
@@ -1329,7 +1052,6 @@ signals:
     title: "Extract Fan Speed"
     kind: measurement
     type: int
-    binding: { space: input, address: 132, encoding: uint16 }
     access: read_only
     unit: "rpm"
     range: [0, 5000]
@@ -1339,38 +1061,29 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 133, encoding: bit, bit: 0 }
-    bitfield: extract_fan_state
 
   extract_fan_tacho_missing:
     title: "Extract Fan State: Tacho Missing"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 133, encoding: bit, bit: 1 }
-    bitfield: extract_fan_state
 
   extract_fan_modbus_timeout:
     title: "Extract Fan State: Modbus Timeout"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 133, encoding: bit, bit: 2 }
-    bitfield: extract_fan_state
 
   extract_fan_blocked_rotor:
     title: "Extract Fan State: Blocked Rotor"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 133, encoding: bit, bit: 3 }
-    bitfield: extract_fan_state
 
   extract_digital_input_state:
     title: "Extract Digital Input State"
     kind: measurement
     type: bool
-    binding: { space: input, address: 134, encoding: uint16 }
     access: read_only
     labels: { false: low, true: high }
     valid_when: extract_digital_input_function != disabled
@@ -1384,78 +1097,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 201, encoding: bit, bit: 0 }
-    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_relative_humidity:
     title: "Supply Channel 1 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 201, encoding: bit, bit: 1 }
-    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_voc:
     title: "Supply Channel 1 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 201, encoding: bit, bit: 2 }
-    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_carbon_dioxide:
     title: "Supply Channel 1 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 201, encoding: bit, bit: 3 }
-    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_barometric_pressure:
     title: "Supply Channel 1 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 201, encoding: bit, bit: 4 }
-    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_sensor_problem:
     title: "Supply Channel 1 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 202, encoding: bit, bit: 0 }
-    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_replacement:
     title: "Supply Channel 1 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 202, encoding: bit, bit: 1 }
-    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_preheating:
     title: "Supply Channel 1 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 202, encoding: bit, bit: 2 }
-    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_not_connected:
     title: "Supply Channel 1 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 202, encoding: bit, bit: 3 }
-    bitfield: supply_ch1_sensor_state
 
   supply_ch1_alerts:
     title: "Supply Channel 1 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 203, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: supply_ch1_enable == enabled
@@ -1464,7 +1158,6 @@ signals:
     title: "Supply Channel 1 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 204, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -1477,7 +1170,6 @@ signals:
     title: "Supply Channel 1 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 205, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -1490,7 +1182,6 @@ signals:
     title: "Supply Channel 1 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 206, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -1502,7 +1193,6 @@ signals:
     title: "Supply Channel 1 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 207, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -1514,7 +1204,6 @@ signals:
     title: "Supply Channel 1 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 208, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -1527,7 +1216,6 @@ signals:
     title: "Supply Channel 1 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 201, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -1538,7 +1226,6 @@ signals:
     title: "Supply Channel 1 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 202, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -1550,7 +1237,6 @@ signals:
     title: "Supply Channel 1 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 203, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -1562,7 +1248,6 @@ signals:
     title: "Supply Channel 1 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 204, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -1573,7 +1258,6 @@ signals:
     title: "Supply Channel 1 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 205, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -1584,7 +1268,6 @@ signals:
     title: "Supply Channel 1 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 206, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -1596,7 +1279,6 @@ signals:
     title: "Supply Channel 1 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 211, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -1606,7 +1288,6 @@ signals:
     title: "Supply Channel 1 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 212, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -1616,7 +1297,6 @@ signals:
     title: "Supply Channel 1 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 213, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -1626,7 +1306,6 @@ signals:
     title: "Supply Channel 1 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 214, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -1641,78 +1320,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 221, encoding: bit, bit: 0 }
-    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_relative_humidity:
     title: "Supply Channel 2 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 221, encoding: bit, bit: 1 }
-    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_voc:
     title: "Supply Channel 2 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 221, encoding: bit, bit: 2 }
-    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_carbon_dioxide:
     title: "Supply Channel 2 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 221, encoding: bit, bit: 3 }
-    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_barometric_pressure:
     title: "Supply Channel 2 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 221, encoding: bit, bit: 4 }
-    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_sensor_problem:
     title: "Supply Channel 2 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 222, encoding: bit, bit: 0 }
-    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_replacement:
     title: "Supply Channel 2 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 222, encoding: bit, bit: 1 }
-    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_preheating:
     title: "Supply Channel 2 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 222, encoding: bit, bit: 2 }
-    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_not_connected:
     title: "Supply Channel 2 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 222, encoding: bit, bit: 3 }
-    bitfield: supply_ch2_sensor_state
 
   supply_ch2_alerts:
     title: "Supply Channel 2 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 223, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: supply_ch2_enable == enabled
@@ -1721,7 +1381,6 @@ signals:
     title: "Supply Channel 2 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 224, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -1734,7 +1393,6 @@ signals:
     title: "Supply Channel 2 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 225, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -1747,7 +1405,6 @@ signals:
     title: "Supply Channel 2 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 226, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -1759,7 +1416,6 @@ signals:
     title: "Supply Channel 2 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 227, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -1771,7 +1427,6 @@ signals:
     title: "Supply Channel 2 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 228, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -1784,7 +1439,6 @@ signals:
     title: "Supply Channel 2 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 221, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -1795,7 +1449,6 @@ signals:
     title: "Supply Channel 2 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 222, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -1807,7 +1460,6 @@ signals:
     title: "Supply Channel 2 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 223, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -1819,7 +1471,6 @@ signals:
     title: "Supply Channel 2 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 224, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -1830,7 +1481,6 @@ signals:
     title: "Supply Channel 2 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 225, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -1841,7 +1491,6 @@ signals:
     title: "Supply Channel 2 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 226, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -1853,7 +1502,6 @@ signals:
     title: "Supply Channel 2 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 231, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -1863,7 +1511,6 @@ signals:
     title: "Supply Channel 2 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 232, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -1873,7 +1520,6 @@ signals:
     title: "Supply Channel 2 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 233, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -1883,7 +1529,6 @@ signals:
     title: "Supply Channel 2 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 234, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -1898,78 +1543,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 241, encoding: bit, bit: 0 }
-    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_relative_humidity:
     title: "Supply Channel 3 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 241, encoding: bit, bit: 1 }
-    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_voc:
     title: "Supply Channel 3 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 241, encoding: bit, bit: 2 }
-    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_carbon_dioxide:
     title: "Supply Channel 3 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 241, encoding: bit, bit: 3 }
-    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_barometric_pressure:
     title: "Supply Channel 3 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 241, encoding: bit, bit: 4 }
-    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_sensor_problem:
     title: "Supply Channel 3 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 242, encoding: bit, bit: 0 }
-    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_replacement:
     title: "Supply Channel 3 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 242, encoding: bit, bit: 1 }
-    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_preheating:
     title: "Supply Channel 3 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 242, encoding: bit, bit: 2 }
-    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_not_connected:
     title: "Supply Channel 3 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 242, encoding: bit, bit: 3 }
-    bitfield: supply_ch3_sensor_state
 
   supply_ch3_alerts:
     title: "Supply Channel 3 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 243, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: supply_ch3_enable == enabled
@@ -1978,7 +1604,6 @@ signals:
     title: "Supply Channel 3 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 244, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -1991,7 +1616,6 @@ signals:
     title: "Supply Channel 3 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 245, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -2004,7 +1628,6 @@ signals:
     title: "Supply Channel 3 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 246, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -2016,7 +1639,6 @@ signals:
     title: "Supply Channel 3 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 247, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -2028,7 +1650,6 @@ signals:
     title: "Supply Channel 3 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 248, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -2041,7 +1662,6 @@ signals:
     title: "Supply Channel 3 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 241, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -2052,7 +1672,6 @@ signals:
     title: "Supply Channel 3 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 242, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -2064,7 +1683,6 @@ signals:
     title: "Supply Channel 3 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 243, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -2076,7 +1694,6 @@ signals:
     title: "Supply Channel 3 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 244, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -2087,7 +1704,6 @@ signals:
     title: "Supply Channel 3 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 245, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -2098,7 +1714,6 @@ signals:
     title: "Supply Channel 3 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 246, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -2110,7 +1725,6 @@ signals:
     title: "Supply Channel 3 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 251, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -2120,7 +1734,6 @@ signals:
     title: "Supply Channel 3 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 252, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -2130,7 +1743,6 @@ signals:
     title: "Supply Channel 3 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 253, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -2140,7 +1752,6 @@ signals:
     title: "Supply Channel 3 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 254, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -2155,78 +1766,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 261, encoding: bit, bit: 0 }
-    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_relative_humidity:
     title: "Extract Channel 1 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 261, encoding: bit, bit: 1 }
-    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_voc:
     title: "Extract Channel 1 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 261, encoding: bit, bit: 2 }
-    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_carbon_dioxide:
     title: "Extract Channel 1 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 261, encoding: bit, bit: 3 }
-    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_barometric_pressure:
     title: "Extract Channel 1 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 261, encoding: bit, bit: 4 }
-    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_sensor_problem:
     title: "Extract Channel 1 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 262, encoding: bit, bit: 0 }
-    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_replacement:
     title: "Extract Channel 1 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 262, encoding: bit, bit: 1 }
-    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_preheating:
     title: "Extract Channel 1 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 262, encoding: bit, bit: 2 }
-    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_not_connected:
     title: "Extract Channel 1 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 262, encoding: bit, bit: 3 }
-    bitfield: extract_ch1_sensor_state
 
   extract_ch1_alerts:
     title: "Extract Channel 1 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 263, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: extract_ch1_enable == enabled
@@ -2235,7 +1827,6 @@ signals:
     title: "Extract Channel 1 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 264, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -2248,7 +1839,6 @@ signals:
     title: "Extract Channel 1 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 265, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -2261,7 +1851,6 @@ signals:
     title: "Extract Channel 1 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 266, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -2273,7 +1862,6 @@ signals:
     title: "Extract Channel 1 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 267, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -2285,7 +1873,6 @@ signals:
     title: "Extract Channel 1 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 268, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -2298,7 +1885,6 @@ signals:
     title: "Extract Channel 1 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 261, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -2309,7 +1895,6 @@ signals:
     title: "Extract Channel 1 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 262, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -2321,7 +1906,6 @@ signals:
     title: "Extract Channel 1 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 263, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -2333,7 +1917,6 @@ signals:
     title: "Extract Channel 1 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 264, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -2344,7 +1927,6 @@ signals:
     title: "Extract Channel 1 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 265, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -2355,7 +1937,6 @@ signals:
     title: "Extract Channel 1 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 266, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -2367,7 +1948,6 @@ signals:
     title: "Extract Channel 1 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 271, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -2377,7 +1957,6 @@ signals:
     title: "Extract Channel 1 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 272, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -2387,7 +1966,6 @@ signals:
     title: "Extract Channel 1 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 273, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -2397,7 +1975,6 @@ signals:
     title: "Extract Channel 1 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 274, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -2412,78 +1989,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 281, encoding: bit, bit: 0 }
-    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_relative_humidity:
     title: "Extract Channel 2 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 281, encoding: bit, bit: 1 }
-    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_voc:
     title: "Extract Channel 2 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 281, encoding: bit, bit: 2 }
-    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_carbon_dioxide:
     title: "Extract Channel 2 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 281, encoding: bit, bit: 3 }
-    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_barometric_pressure:
     title: "Extract Channel 2 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 281, encoding: bit, bit: 4 }
-    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_sensor_problem:
     title: "Extract Channel 2 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 282, encoding: bit, bit: 0 }
-    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_replacement:
     title: "Extract Channel 2 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 282, encoding: bit, bit: 1 }
-    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_preheating:
     title: "Extract Channel 2 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 282, encoding: bit, bit: 2 }
-    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_not_connected:
     title: "Extract Channel 2 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 282, encoding: bit, bit: 3 }
-    bitfield: extract_ch2_sensor_state
 
   extract_ch2_alerts:
     title: "Extract Channel 2 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 283, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: extract_ch2_enable == enabled
@@ -2492,7 +2050,6 @@ signals:
     title: "Extract Channel 2 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 284, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -2505,7 +2062,6 @@ signals:
     title: "Extract Channel 2 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 285, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -2518,7 +2074,6 @@ signals:
     title: "Extract Channel 2 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 286, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -2530,7 +2085,6 @@ signals:
     title: "Extract Channel 2 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 287, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -2542,7 +2096,6 @@ signals:
     title: "Extract Channel 2 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 288, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -2555,7 +2108,6 @@ signals:
     title: "Extract Channel 2 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 281, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -2566,7 +2118,6 @@ signals:
     title: "Extract Channel 2 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 282, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -2578,7 +2129,6 @@ signals:
     title: "Extract Channel 2 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 283, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -2590,7 +2140,6 @@ signals:
     title: "Extract Channel 2 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 284, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -2601,7 +2150,6 @@ signals:
     title: "Extract Channel 2 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 285, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -2612,7 +2160,6 @@ signals:
     title: "Extract Channel 2 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 286, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -2624,7 +2171,6 @@ signals:
     title: "Extract Channel 2 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 291, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -2634,7 +2180,6 @@ signals:
     title: "Extract Channel 2 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 292, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -2644,7 +2189,6 @@ signals:
     title: "Extract Channel 2 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 293, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -2654,7 +2198,6 @@ signals:
     title: "Extract Channel 2 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 294, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -2669,78 +2212,59 @@ signals:
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 301, encoding: bit, bit: 0 }
-    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_relative_humidity:
     title: "Extract Channel 3 - Sensor Capability: Relative Humidity"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 301, encoding: bit, bit: 1 }
-    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_voc:
     title: "Extract Channel 3 - Sensor Capability: VOC"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 301, encoding: bit, bit: 2 }
-    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_carbon_dioxide:
     title: "Extract Channel 3 - Sensor Capability: Carbon Dioxide"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 301, encoding: bit, bit: 3 }
-    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_barometric_pressure:
     title: "Extract Channel 3 - Sensor Capability: Barometric Pressure"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 301, encoding: bit, bit: 4 }
-    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_sensor_problem:
     title: "Extract Channel 3 - Sensor State: Sensor Problem"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 302, encoding: bit, bit: 0 }
-    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_replacement:
     title: "Extract Channel 3 - Sensor State: Sensor Replacement"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 302, encoding: bit, bit: 1 }
-    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_preheating:
     title: "Extract Channel 3 - Sensor State: Sensor Preheating"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 302, encoding: bit, bit: 2 }
-    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_not_connected:
     title: "Extract Channel 3 - Sensor State: Not Connected"
     kind: measurement
     type: bool
     access: read_only
-    binding: { space: input, address: 302, encoding: bit, bit: 3 }
-    bitfield: extract_ch3_sensor_state
 
   extract_ch3_alerts:
     title: "Extract Channel 3 - Alerts"
     kind: measurement
     type: enum
-    binding: { space: input, address: 303, encoding: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
     valid_when: extract_ch3_enable == enabled
@@ -2749,7 +2273,6 @@ signals:
     title: "Extract Channel 3 - Temperature Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 304, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -2762,7 +2285,6 @@ signals:
     title: "Extract Channel 3 - Relative Humidity Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 305, encoding: uint16 }
     access: read_only
     unit: "%RH"
     scale: 0.1
@@ -2775,7 +2297,6 @@ signals:
     title: "Extract Channel 3 - VOC Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 306, encoding: uint16 }
     access: read_only
     unit: "index"
     decimals: 0
@@ -2787,7 +2308,6 @@ signals:
     title: "Extract Channel 3 - Carbon Dioxide Level"
     kind: measurement
     type: int
-    binding: { space: input, address: 307, encoding: uint16 }
     access: read_only
     unit: "ppm"
     decimals: 0
@@ -2799,7 +2319,6 @@ signals:
     title: "Extract Channel 3 - Barometric Pressure Level"
     kind: measurement
     type: real
-    binding: { space: input, address: 308, encoding: uint16 }
     access: read_only
     unit: "hPa"
     scale: 0.1
@@ -2812,7 +2331,6 @@ signals:
     title: "Extract Channel 3 - Channel Enable"
     kind: setting
     type: bool
-    binding: { space: holding, address: 301, encoding: uint16 }
     labels: { false: disabled, true: enabled }
     default: enabled
     on_write:
@@ -2823,7 +2341,6 @@ signals:
     title: "Extract Channel 3 - Temperature Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 302, encoding: int16 }
     unit: "°C"
     scale: 0.1
     decimals: 1
@@ -2835,7 +2352,6 @@ signals:
     title: "Extract Channel 3 - Relative Humidity Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 303, encoding: int16 }
     unit: "%RH"
     scale: 0.1
     decimals: 1
@@ -2847,7 +2363,6 @@ signals:
     title: "Extract Channel 3 - VOC Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 304, encoding: int16 }
     unit: "index"
     decimals: 0
     range: [-50, 50]
@@ -2858,7 +2373,6 @@ signals:
     title: "Extract Channel 3 - Carbon Dioxide Correction Value"
     kind: setting
     type: int
-    binding: { space: holding, address: 305, encoding: int16 }
     unit: "ppm"
     decimals: 0
     range: [-200, 200]
@@ -2869,7 +2383,6 @@ signals:
     title: "Extract Channel 3 - Barometric Pressure Correction Value"
     kind: setting
     type: real
-    binding: { space: holding, address: 306, encoding: int16 }
     unit: "hPa"
     scale: 0.1
     decimals: 1
@@ -2881,7 +2394,6 @@ signals:
     title: "Extract Channel 3 - Carbon Dioxide Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 311, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1000
@@ -2891,7 +2403,6 @@ signals:
     title: "Extract Channel 3 - Carbon Dioxide Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 312, encoding: uint16 }
     unit: "ppm"
     range: [400, 5000]
     default: 1400
@@ -2901,7 +2412,6 @@ signals:
     title: "Extract Channel 3 - VOC Alert 1 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 313, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 150
@@ -2911,7 +2421,6 @@ signals:
     title: "Extract Channel 3 - VOC Alert 2 Level"
     kind: setting
     type: int
-    binding: { space: holding, address: 314, encoding: uint16 }
     unit: "index"
     range: [0, 500]
     default: 300
@@ -2959,7 +2468,6 @@ signals:
     title: "MCU Temperature"
     kind: measurement
     type: real
-    binding: { space: input, address: 501, encoding: int16 }
     access: read_only
     unit: "°C"
     scale: 0.1
@@ -2969,7 +2477,6 @@ signals:
     title: "Lifetime - days"
     kind: measurement
     type: int
-    binding: { space: input, address: 504, encoding: uint16 }
     access: read_only
     unit: "days"
 
@@ -2977,7 +2484,6 @@ signals:
     title: "Lifetime - minutes"
     kind: measurement
     type: int
-    binding: { space: input, address: 505, encoding: uint16 }
     access: read_only
     unit: "minutes"
 
@@ -2985,7 +2491,6 @@ signals:
     title: "Internal voltage - 12VDC"
     kind: measurement
     type: real
-    binding: { space: input, address: 506, encoding: uint16 }
     access: read_only
     unit: "VDC"
     scale: 0.1
@@ -2995,7 +2500,6 @@ signals:
     title: "Internal voltage - 3.3VDC"
     kind: measurement
     type: real
-    binding: { space: input, address: 507, encoding: uint16 }
     access: read_only
     unit: "VDC"
     scale: 0.01
@@ -3005,7 +2509,6 @@ signals:
     title: "Device Reset"
     kind: command
     type: bool
-    binding: { space: holding, address: 990, encoding: uint16 }
     access: write_only
     labels: { false: idle, true: reset }
     default: idle
@@ -3024,7 +2527,7 @@ procedures:
       - supply_fan_speed == 0
       - extract_fan_speed == 0
     steps:
-      - write: { signal: left_right_swap, value: $param.orientation }
+      - write: { property: left_right_swap, value: $param.orientation }
         verify:
           read: left_right_swap
           equals: $param.orientation
@@ -3032,9 +2535,9 @@ procedures:
       - delay_ms: 1000
       - reread: [supply_digital_input_state, extract_digital_input_state]
     on_failure:
-      - write: { signal: operating_mode, value: standby }
+      - write: { property: operating_mode, value: standby }
     outcome:
-      failure: { signal: error_sensor_bus_fault, equals: true }
+      failure: { property: error_sensor_bus_fault, equals: true }
     params:
       orientation: { enum_from: left_right_swap }
 
@@ -3047,12 +2550,12 @@ procedures:
     preconditions:
       - operating_mode == standby
     steps:
-      - write: { signal: supply_fan_control_source, value: $param.source }
+      - write: { property: supply_fan_control_source, value: $param.source }
         verify:
           read: supply_fan_control_source
           equals: $param.source
           timeout_ms: 1000
-      - write: { signal: extract_fan_control_source, value: $param.source }
+      - write: { property: extract_fan_control_source, value: $param.source }
         verify:
           read: extract_fan_control_source
           equals: $param.source
@@ -3068,9 +2571,9 @@ procedures:
       have been physically removed lose their configuration."
     duration_ms: 10000
     steps:
-      - write: { signal: sensor_bus_rescan, value: rescan }
+      - write: { property: sensor_bus_rescan, value: rescan }
       - await:
-          signal: sensor_bus_state
+          property: sensor_bus_state
           in: [complete, failed]
           timeout_ms: 15000
           poll_ms: 500
@@ -3088,8 +2591,8 @@ procedures:
           - extract_ch3_provides_temperature
           - extract_ch3_provides_carbon_dioxide
     outcome:
-      success: { signal: sensor_bus_state, equals: complete }
-      failure: { signal: sensor_bus_state, equals: failed }
+      success: { property: sensor_bus_state, equals: complete }
+      failure: { property: sensor_bus_state, equals: failed }
 
   commission_fan_limits:
     title: "Set fan output limits"
@@ -3099,10 +2602,10 @@ procedures:
     preconditions:
       - operating_mode == standby
     steps:
-      - write: { signal: supply_fan_minimum_output_value, value: $param.minimum }
-      - write: { signal: supply_fan_maximum_output_value, value: $param.maximum }
-      - write: { signal: extract_fan_minimum_output_value, value: $param.minimum }
-      - write: { signal: extract_fan_maximum_output_value, value: $param.maximum }
+      - write: { property: supply_fan_minimum_output_value, value: $param.minimum }
+      - write: { property: supply_fan_maximum_output_value, value: $param.maximum }
+      - write: { property: extract_fan_minimum_output_value, value: $param.minimum }
+      - write: { property: extract_fan_maximum_output_value, value: $param.maximum }
     params:
       minimum: { type: int, range: [20, 60], default: 30, title: "Minimum output" }
       maximum: { type: int, range: [60, 100], default: 100, title: "Maximum output" }
@@ -3116,10 +2619,10 @@ procedures:
     preconditions:
       - operating_mode == standby
     steps:
-      - write: { signal: outdoor_air_temperature_source, value: $param.outdoor }
-      - write: { signal: supply_air_temperature_source, value: $param.supply }
-      - write: { signal: extract_air_temperature_source, value: $param.extract }
-      - write: { signal: exhaust_air_temperature_source, value: $param.exhaust }
+      - write: { property: outdoor_air_temperature_source, value: $param.outdoor }
+      - write: { property: supply_air_temperature_source, value: $param.supply }
+      - write: { property: extract_air_temperature_source, value: $param.extract }
+      - write: { property: exhaust_air_temperature_source, value: $param.exhaust }
       - delay_ms: 500
       - reread:
           - outdoor_air_temperature
@@ -3138,11 +2641,11 @@ procedures:
     danger: low
     confirm: "Only do this when the filters have actually been replaced."
     steps:
-      - write: { signal: filter_counter_reset, value: reset }
+      - write: { property: filter_counter_reset, value: reset }
       - delay_ms: 500
       - reread:
           - filter_elapsed_time
           - filter_replacement_due
           - filter_replacement_overdue
     outcome:
-      success: { signal: filter_replacement_due, equals: false }
+      success: { property: filter_replacement_due, equals: false }
