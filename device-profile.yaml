@@ -1,0 +1,78 @@
+access:
+  supported_fc: [3, 4, 6, 16]
+  max_read_words: 32       # device-specific, not the Modbus 125 limit
+  max_write_words: 16
+  gaps_readable: true      # safe to read across unmapped addresses
+  turnaround_ms: 5
+
+signals:
+  humidity_mode:
+    binding: { holding: 0x0040, type: uint16 }
+    access: commissioning
+    enum: { 0: relative, 1: absolute }
+    selects: [humidity]          # declares the dependency
+
+  humidity:
+    binding: { input: 0x0010, type: uint16 }
+    variants:
+      - when: humidity_mode == relative
+        unit: "%RH"
+        scale: 0.1
+        range: [0, 100]
+      - when: humidity_mode == absolute
+        unit: "g/m3"
+        scale: 0.1
+        range: [0, 50]
+
+  gas_type:
+    binding: { holding: 0x0050, type: uint16 }
+    access: commissioning
+    enum: { 0: LPG, 1: propane, 2: methane }
+    selects: [gas_concentration, alarm_level_1, alarm_level_2]
+    on_write:
+      reread: dependents        # default: everything that references gas_type
+      settle_ms: 200    
+
+  alarm_level_1:
+    binding: { holding: 0x0060, type: uint16 }
+    access: commissioning
+    unit: "%LEL"
+    scale: 0.1
+    constraints:
+      - when: gas_type == LPG
+        range: [50, 200]
+        default: 100
+      - when: gas_type == methane
+        range: [50, 250]
+        default: 100
+
+procedures:
+  set_gas_type:
+    title: "Change gas type"
+    danger: high
+    confirm: "Changes alarm thresholds. Detector will not alarm during calibration mode."
+    preconditions:
+      - device_mode == idle
+      - "not any(channel[*].alarm_active)"
+    steps:
+      - write: { binding: unlock, value: 0x00A5 }
+      - write: { signal: gas_type, value: $param.gas }
+        verify: { read: gas_type, equals: $param.gas, timeout_ms: 500 }
+      - reread: [alarm_level_1, alarm_level_2]     # device may clamp them
+      - write: { binding: unlock, value: 0x0000 }
+    on_failure:
+      - write: { binding: unlock, value: 0x0000 }  # always relock
+    params:
+      gas: { enum_from: gas_type }
+
+  zero_calibrate:
+    title: "Zero calibration"
+    danger: high
+    duration_ms: 60000
+    steps:
+      - write: { binding: cmd, value: 0x0001 }
+      - await: { signal: cal_status, equals: complete,
+                 timeout_ms: 90000, poll_ms: 1000 }
+    outcome:
+      success: { signal: cal_status, equals: complete }
+      failure: { signal: cal_status, in: [failed, aborted] }
