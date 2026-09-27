@@ -445,3 +445,71 @@ misleading people.
 examples are in the file, marked as such, and the actual list must come from the
 firmware author. Also whether a setting may be volatile (session-only), which
 `kind: setting` currently forbids by implication.
+
+## D9 — Semantics and protocol facts stay in one file per device
+
+**Decided.** A device's properties and their Modbus bindings live together, one
+file per device. Nothing changes in the repository; this records why, and the
+measurements behind it, because the question returns whenever a second device
+appears.
+
+**Why not split a property from its binding.** The strongest argument is a
+regression the split would create, and it exists only because of D8: with
+bindings in a separate file keyed by name, a misspelled name produces *two*
+silent bugs. The property finds no binding and therefore looks internal — which
+D8 made legal — while the binding becomes an orphan. Inline, the same typo is a
+single YAML structure error in one place. Splitting would cost error detection
+exactly where off-bus properties made the format more permissive.
+
+On consumers the picture is genuinely mixed, not one-sided: the settings-storage
+and live-data generators need only the semantic half, while documentation, the
+commissioning tool and any register-map output need both. But ignoring a field
+is free and joining two files is not, so co-location wins on cost asymmetry
+rather than on necessity.
+
+**Protocol facts that are not per-property are already separate** — the
+`access:` section holds `supported_fc`, the word limits, `gaps_readable` and
+`turnaround_ms`. That is the right home for them: a section, not a file.
+
+**A registers-only view is a derived output**, on the same principle as D1's
+reverse index. Derive views; do not store them.
+
+**If the file gets unwieldy, split by subsystem, never by layer.** At 2100 lines
+it is already awkward. Splitting into `properties.yaml` plus `modbus.yaml` is
+the worst available cut: it puts a property's meaning and its address in
+different files, which is precisely the pair that gets read together. Splitting
+into `fans.yaml`, `sensors.yaml`, `bypass.yaml` keeps each property whole and
+helps navigation far more.
+
+**Where separation does pay: definitions shared across devices.** Measured over
+the 25 profiles in `3SModbus/DeviceLibrary`, 1169 registers total:
+
+- 48% of all registers use a name shared by 3 or more devices — a large reuse
+  surface
+- but only 68% of those shared names carry identical semantics everywhere
+
+The distribution is cleanly bimodal, which is what makes the answer tractable:
+
+| definition | devices | distinct addresses | semantic variants |
+|---|---|---|---|
+| Slave Address, Baud Rate, Parity, Device Type, HW/FW Version | 20 | 1 | 1 |
+| Termination Resistor, Registers Reset | 18 | 1 | 1 |
+| Device Reset | 17 | 1 | 2 |
+| Device Status - Warnings | 12 | 1 | 3 |
+| Minimum / Maximum Output Value | 3 | — | 5 |
+
+So roughly ten registers — the device-common block — are provably identical
+across 17 to 20 devices in name, address and semantics. Those are true shared
+definitions and worth extracting into a shared include.
+
+Everything else that looks shared is shared in **name and shape only**.
+`Device Status - Warnings` sits at one address in 12 devices with three
+different sets of bit meanings, because each device has different warnings.
+`Minimum Output Value` has five semantic variants across three devices. Pulling
+those into shared definitions would need per-device overrides, and D5 settled
+what an abstraction demanding an escape hatch on first contact is worth.
+
+**Deferred, not rejected.** The common-block include is real but premature: this
+repository has one device, so an include buys indirection and no reuse.
+Revisit when a second device lands here, and extract only the rows in the top
+two bands of that table.
