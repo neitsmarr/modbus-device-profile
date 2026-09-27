@@ -706,3 +706,65 @@ different values, which the profile already relies on: `holding 1` is the slave
 address while `input 1` holds the error bits. D11's collision checks key on
 (space, address), so they catch a real clash inside one space without
 complaining about that.
+
+## D13 — Where documentation prose lives
+
+Asked while planning a generated Modbus register map: where does a register
+description go?
+
+**Per property: `description`, which already existed and was unused.** The
+schema has carried `description` on every property, on each procedure and on
+`device` since D2. Zero of 279 properties used it. Nothing needed inventing;
+the field needs filling, and only the device author can fill most of it.
+
+**Prose belongs in fields, not comments.** The profile held 120 comment lines,
+including the reason air path temperatures name a source channel, the
+PROVISIONAL note on filter monitoring, and every section heading. A generator
+cannot read any of it, so prose a reader of the documentation needs is not
+allowed to live in a comment. Five property-level comments were converted to
+`description` as the pattern to follow: left_right_swap, modbus_safety_timeout,
+heat_recovery_efficiency, preheater_installed, bypass_minimum_output_value.
+Comments remain fine for notes aimed at whoever edits the profile -- the D7
+PROVISIONAL note is genuinely of that kind.
+
+**Packed registers get a `bitfields:` section, which also removes a
+duplication.** D11 made each bit its own property and left the packed register
+with no home for prose, and worse, repeated its title string on all 87 bits with
+a check that they agreed. Now each packed register is declared once, with a
+title and a description, and bits reference it by id:
+
+    bitfields:
+      device_status_errors:
+        title: "Device Status - Errors"
+        description: >-
+          Fault conditions that stop normal operation. ...
+
+    error_memory_fault:
+      bitfield: device_status_errors
+
+19 declarations replace 87 repeated strings, and the class of error the old
+check looked for -- bits disagreeing about their register's name -- is now
+unrepresentable rather than merely detected.
+
+The declaration deliberately carries **no address**: it is derived from the bits
+that reference it, per D1, and the validator reports a packed register whose bits
+are spread over more than one register, a reference to an undeclared bitfield,
+and a declared bitfield nobody references.
+
+This is not a return to the `registers:` section deleted in D6. That one was a
+substitute for properties -- raw registers that should have been signals.
+A packed register genuinely is not a property: its bits are.
+
+**Two gaps left open, both needing a call on verbosity:**
+
+- *Enum member prose.* 125 enum members have nowhere to carry an explanation,
+  because `enum` maps a value straight to a name. Options: a sparse parallel
+  `enum_descriptions` keyed by member name, paid only where prose exists; or
+  turning `enum` into a list of `{value, name, description}` records, which is
+  uniform and matches the library's `entries` shape but adds roughly 180 lines
+  for the members that need no prose.
+- *Section headings.* The 15 section headings are comments, so a generated map
+  is one flat 279-row table. A `sections:` section referenced by a `section:`
+  id per property would mirror how `bitfields` now works, robust to addresses
+  moving, at the cost of one short line per property. Declaring sections as
+  address ranges instead avoids that line but drifts whenever a register moves.

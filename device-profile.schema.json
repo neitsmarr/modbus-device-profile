@@ -24,6 +24,20 @@
       }
     },
     "access": { "$ref": "#/$defs/access" },
+    "bitfields": {
+      "description": "Packed registers: a register whose bits are separate bool properties (D11). The register is not a property, but it is a named thing the register map documents, so it is declared once here and referenced by its bits. Its address is deliberately absent -- it is derived from the bits that reference it, which must all agree.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
     "signals": {
       "type": "object",
       "minProperties": 1,
@@ -331,9 +345,8 @@
           }
         },
         "bitfield": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Human name of the packed register this bit belongs to, such as Device Status - Errors. Bits group into a register by their shared address; this only supplies the group's name, and every bit at one address must give the same name."
+          "$ref": "#/$defs/identifier",
+          "description": "The packed register in the top-level bitfields section that this bit belongs to. A reference rather than a repeated name, so the register's title and description are stated once and cannot disagree between bits."
         },
 
         "present_when": { "$ref": "#/$defs/expression" },

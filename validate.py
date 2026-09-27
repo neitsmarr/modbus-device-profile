@@ -392,14 +392,41 @@ def check_addresses(doc, rep: Report) -> None:
         named = {n for n in names if n}
         if len(named) > 1:
             rep.error(
-                f"{table} register {addr}: bits disagree about the packed register's "
-                f"name ({', '.join(sorted(named))})"
+                f"{table} register {addr}: its bits point at different packed "
+                f"registers ({', '.join(sorted(named))})"
             )
         if None in names and named:
             rep.warn(
-                f"{table} register {addr}: some bits give a bitfield name and some "
+                f"{table} register {addr}: some bits name a packed register and some "
                 f"do not"
             )
+
+    # every bitfield reference resolves, and each packed register lives at one address
+    declared = doc.get("bitfields") or {}
+    where: dict[str, set] = {}
+    for name in sorted(signals):
+        sig = signals[name]
+        ref = sig.get("bitfield")
+        if ref is None:
+            continue
+        if ref not in declared:
+            rep.error(
+                f"signals/{name}/bitfield: '{ref}' is not declared in the bitfields "
+                f"section"
+            )
+            continue
+        b = sig.get("binding") or {}
+        if "space" in b and "address" in b:
+            where.setdefault(ref, set()).add((b["space"], b["address"]))
+    for ref, places in sorted(where.items()):
+        if len(places) > 1:
+            rep.error(
+                f"bitfields/{ref}: its bits are spread over more than one register "
+                f"({', '.join(f'{t} {a}' for t, a in sorted(places))})"
+            )
+    for ref in sorted(declared):
+        if ref not in where:
+            rep.warn(f"bitfields/{ref}: declared but no property references it")
 
 
 def check_internal_properties(doc, rep: Report) -> None:

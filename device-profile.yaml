@@ -32,6 +32,132 @@ access:
   gaps_readable: true         # ASSUMPTION: blocks span unmapped addresses safely
   turnaround_ms: 5
 
+bitfields:
+
+  # A packed register is not a property -- each of its bits is (D11). It is
+  # still a named thing the register map documents, so it is declared once
+  # here and referenced by its bits. Its address is NOT repeated: it is
+  # derived from the bits that point at it, and they must agree.
+
+  device_status_errors:
+    title: "Device Status - Errors"
+    description: >-
+      Fault conditions that stop normal operation. Any bit set here is
+      reflected in application_state.
+
+  device_status_warnings:
+    title: "Device Status - Warnings"
+    description: >-
+      Conditions that degrade operation or need attention but do not stop
+      ventilation.
+
+  preheater_state:
+    title: "Pre-heater State"
+    description: >-
+      Pre-heater diagnostics. Meaningful only on units where the pre-heater
+      option is fitted.
+
+  bypass_state:
+    title: "Bypass State"
+    description: >-
+      Bypass damper diagnostics, including the two conditions under which the
+      unit holds the damper closed regardless of the control mode.
+
+  filter_state:
+    title: "Filter State"
+    description: >-
+      Filter condition as judged by the selected monitoring mode.
+
+  supply_fan_state:
+    title: "Supply Fan State"
+    description: >-
+      Fault and diagnostic bits for the supply fan channel, whichever control
+      source is selected.
+
+  extract_fan_state:
+    title: "Extract Fan State"
+    description: >-
+      Fault and diagnostic bits for the extract fan channel, whichever control
+      source is selected.
+
+  supply_ch1_sensor_capability:
+    title: "Supply Channel 1 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on supply channel 1 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  supply_ch1_sensor_state:
+    title: "Supply Channel 1 - Sensor State"
+    description: >-
+      Condition of the sensor module on supply channel 1. Its readings are
+      only trustworthy while none of these bits is set.
+
+  supply_ch2_sensor_capability:
+    title: "Supply Channel 2 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on supply channel 2 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  supply_ch2_sensor_state:
+    title: "Supply Channel 2 - Sensor State"
+    description: >-
+      Condition of the sensor module on supply channel 2. Its readings are
+      only trustworthy while none of these bits is set.
+
+  supply_ch3_sensor_capability:
+    title: "Supply Channel 3 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on supply channel 3 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  supply_ch3_sensor_state:
+    title: "Supply Channel 3 - Sensor State"
+    description: >-
+      Condition of the sensor module on supply channel 3. Its readings are
+      only trustworthy while none of these bits is set.
+
+  extract_ch1_sensor_capability:
+    title: "Extract Channel 1 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on extract channel 1 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  extract_ch1_sensor_state:
+    title: "Extract Channel 1 - Sensor State"
+    description: >-
+      Condition of the sensor module on extract channel 1. Its readings are
+      only trustworthy while none of these bits is set.
+
+  extract_ch2_sensor_capability:
+    title: "Extract Channel 2 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on extract channel 2 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  extract_ch2_sensor_state:
+    title: "Extract Channel 2 - Sensor State"
+    description: >-
+      Condition of the sensor module on extract channel 2. Its readings are
+      only trustworthy while none of these bits is set.
+
+  extract_ch3_sensor_capability:
+    title: "Extract Channel 3 - Sensor Capability"
+    description: >-
+      Which measurands the sensor module on extract channel 3 reports.
+      Discovered at startup and after a bus rescan; a channel may report
+      several at once.
+
+  extract_ch3_sensor_state:
+    title: "Extract Channel 3 - Sensor State"
+    description: >-
+      Condition of the sensor module on extract channel 3. Its readings are
+      only trustworthy while none of these bits is set.
+
 signals:
 
   # ---------------------------------------------------------------------
@@ -189,10 +315,13 @@ signals:
     binding: { space: holding, address: 21, encoding: uint16 }
     labels: { false: normal, true: swapped }
     default: normal
-    # Exchanges which physical side each air chain drives. Every chain and
-    # channel reading below is reported in logical (supply/extract) terms, so
-    # nothing here is conditional on it -- the mapping happens in firmware.
-    # It is still a commissioning-critical write: see swap_air_chains.
+    description: >-
+      Exchanges which physical side each air chain drives. Every chain and
+      channel reading elsewhere in this map is reported in logical
+      (supply / extract) terms, so nothing is conditional on this setting --
+      the mapping happens in firmware. Changing it after installation
+      invalidates the commissioned duct and sensor layout; use the
+      swap_air_chains procedure.
     on_write:
       settle_ms: 1000
 
@@ -247,8 +376,10 @@ signals:
     unit: "minutes"
     range: [0, 240]
     default: 0
-    # 0 disables the fallback; any other value returns the unit to
-    # automatic when the server interface goes quiet that long.
+    description: >-
+      How long the server interface may stay silent before the unit falls back
+      to automatic operation. Zero disables the fallback, leaving the unit in
+      whatever mode a client last wrote.
 
   sensor_bus_rescan:
     title: "Sensor Bus Rescan"
@@ -273,7 +404,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 0 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_internal_voltage_fault:
     title: "Device Status - Errors: Internal Voltage Fault"
@@ -281,7 +412,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 1 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_memory_fault:
     title: "Device Status - Errors: Memory Fault"
@@ -289,7 +420,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 2 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_supply_fan_fault:
     title: "Device Status - Errors: Supply Fan Fault"
@@ -297,7 +428,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 3 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_extract_fan_fault:
     title: "Device Status - Errors: Extract Fan Fault"
@@ -305,7 +436,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 4 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_sensor_bus_fault:
     title: "Device Status - Errors: Sensor Bus Fault"
@@ -313,7 +444,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 5 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_preheater_fault:
     title: "Device Status - Errors: Preheater Fault"
@@ -321,7 +452,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 6 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   error_bypass_fault:
     title: "Device Status - Errors: Bypass Fault"
@@ -329,7 +460,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 1, encoding: bit, bit: 7 }
-    bitfield: "Device Status - Errors"
+    bitfield: device_status_errors
 
   warning_supply_voltage_warning:
     title: "Device Status - Warnings: Supply Voltage Warning"
@@ -337,7 +468,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 0 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   warning_internal_voltage_warning:
     title: "Device Status - Warnings: Internal Voltage Warning"
@@ -345,7 +476,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 1 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   warning_sensor_replacement_due:
     title: "Device Status - Warnings: Sensor Replacement Due"
@@ -353,7 +484,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 2 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   warning_client_interface_degraded:
     title: "Device Status - Warnings: Client Interface Degraded"
@@ -361,7 +492,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 3 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   warning_filter_replacement_due:
     title: "Device Status - Warnings: Filter Replacement Due"
@@ -369,7 +500,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 4 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   warning_efficiency_below_expected:
     title: "Device Status - Warnings: Efficiency Below Expected"
@@ -377,7 +508,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 2, encoding: bit, bit: 5 }
-    bitfield: "Device Status - Warnings"
+    bitfield: device_status_warnings
 
   supply_voltage:
     title: "Supply Voltage"
@@ -510,9 +641,11 @@ signals:
     access: read_only
     unit: "%"
     range: [0, 100]
-    # (supply - outdoor) / (extract - outdoor). Undefined while any of the
-    # three sources is unassigned; the firmware also suppresses it when
-    # extract and outdoor are too close together to divide by.
+    description: >-
+      Sensible efficiency of the heat exchanger, computed as
+      (supply - outdoor) / (extract - outdoor). Undefined while any of those
+      three air path temperature sources is unassigned, and suppressed by the
+      firmware when extract and outdoor are too close together to divide by.
     valid_when: >-
       outdoor_air_temperature_source != none and
       supply_air_temperature_source != none and
@@ -529,8 +662,10 @@ signals:
     binding: { space: holding, address: 41, encoding: uint16 }
     labels: { false: not_installed, true: installed }
     default: not_installed
-    # The option this whole block hangs off. On a unit without the pre-heater
-    # every register below is absent, not merely idle.
+    description: >-
+      Whether the pre-heater option is fitted. Every other pre-heater register
+      is absent on a unit without it, rather than present and idle, so this is
+      the first thing a commissioning tool should establish.
     on_write:
       reread: dependents
       settle_ms: 500
@@ -615,7 +750,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 32, encoding: bit, bit: 0 }
-    bitfield: "Pre-heater State"
+    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_thermal_cutout_open:
@@ -624,7 +759,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 32, encoding: bit, bit: 1 }
-    bitfield: "Pre-heater State"
+    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_output_saturated:
@@ -633,7 +768,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 32, encoding: bit, bit: 2 }
-    bitfield: "Pre-heater State"
+    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   preheater_frost_protection_active:
@@ -642,7 +777,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 32, encoding: bit, bit: 3 }
-    bitfield: "Pre-heater State"
+    bitfield: preheater_state
     valid_when: preheater_installed == installed
 
   # ---------------------------------------------------------------------
@@ -678,7 +813,9 @@ signals:
     range: [0, 40]
     default: 0
     present_when: bypass_control_mode != disabled
-    # The damper's closed end stop, as a percentage of the analog output.
+    description: >-
+      The damper's closed end stop, as a percentage of the analog output.
+      Raising it above zero trims a damper that does not fully seat.
 
   bypass_maximum_output_value:
     title: "Bypass Maximum Output Value"
@@ -741,7 +878,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 42, encoding: bit, bit: 0 }
-    bitfield: "Bypass State"
+    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_position_feedback_missing:
@@ -750,7 +887,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 42, encoding: bit, bit: 1 }
-    bitfield: "Bypass State"
+    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_held_closed_by_frost_protection:
@@ -759,7 +896,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 42, encoding: bit, bit: 2 }
-    bitfield: "Bypass State"
+    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   bypass_held_closed_by_missing_temperature:
@@ -768,7 +905,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 42, encoding: bit, bit: 3 }
-    bitfield: "Bypass State"
+    bitfield: bypass_state
     valid_when: bypass_control_mode != disabled
 
   # ---------------------------------------------------------------------
@@ -839,7 +976,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 53, encoding: bit, bit: 0 }
-    bitfield: "Filter State"
+    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_replacement_overdue:
@@ -848,7 +985,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 53, encoding: bit, bit: 1 }
-    bitfield: "Filter State"
+    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_pressure_sensor_fault:
@@ -857,7 +994,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 53, encoding: bit, bit: 2 }
-    bitfield: "Filter State"
+    bitfield: filter_state
     valid_when: filter_monitoring_mode != disabled
 
   filter_counter_reset:
@@ -1019,7 +1156,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 103, encoding: bit, bit: 0 }
-    bitfield: "Supply Fan State"
+    bitfield: supply_fan_state
 
   supply_fan_tacho_missing:
     title: "Supply Fan State: Tacho Missing"
@@ -1027,7 +1164,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 103, encoding: bit, bit: 1 }
-    bitfield: "Supply Fan State"
+    bitfield: supply_fan_state
 
   supply_fan_modbus_timeout:
     title: "Supply Fan State: Modbus Timeout"
@@ -1035,7 +1172,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 103, encoding: bit, bit: 2 }
-    bitfield: "Supply Fan State"
+    bitfield: supply_fan_state
 
   supply_fan_blocked_rotor:
     title: "Supply Fan State: Blocked Rotor"
@@ -1043,7 +1180,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 103, encoding: bit, bit: 3 }
-    bitfield: "Supply Fan State"
+    bitfield: supply_fan_state
 
   supply_digital_input_state:
     title: "Supply Digital Input State"
@@ -1203,7 +1340,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 133, encoding: bit, bit: 0 }
-    bitfield: "Extract Fan State"
+    bitfield: extract_fan_state
 
   extract_fan_tacho_missing:
     title: "Extract Fan State: Tacho Missing"
@@ -1211,7 +1348,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 133, encoding: bit, bit: 1 }
-    bitfield: "Extract Fan State"
+    bitfield: extract_fan_state
 
   extract_fan_modbus_timeout:
     title: "Extract Fan State: Modbus Timeout"
@@ -1219,7 +1356,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 133, encoding: bit, bit: 2 }
-    bitfield: "Extract Fan State"
+    bitfield: extract_fan_state
 
   extract_fan_blocked_rotor:
     title: "Extract Fan State: Blocked Rotor"
@@ -1227,7 +1364,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 133, encoding: bit, bit: 3 }
-    bitfield: "Extract Fan State"
+    bitfield: extract_fan_state
 
   extract_digital_input_state:
     title: "Extract Digital Input State"
@@ -1248,7 +1385,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 201, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 1 - Sensor Capability"
+    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_relative_humidity:
     title: "Supply Channel 1 - Sensor Capability: Relative Humidity"
@@ -1256,7 +1393,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 201, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 1 - Sensor Capability"
+    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_voc:
     title: "Supply Channel 1 - Sensor Capability: VOC"
@@ -1264,7 +1401,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 201, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 1 - Sensor Capability"
+    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_carbon_dioxide:
     title: "Supply Channel 1 - Sensor Capability: Carbon Dioxide"
@@ -1272,7 +1409,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 201, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 1 - Sensor Capability"
+    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_provides_barometric_pressure:
     title: "Supply Channel 1 - Sensor Capability: Barometric Pressure"
@@ -1280,7 +1417,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 201, encoding: bit, bit: 4 }
-    bitfield: "Supply Channel 1 - Sensor Capability"
+    bitfield: supply_ch1_sensor_capability
 
   supply_ch1_sensor_problem:
     title: "Supply Channel 1 - Sensor State: Sensor Problem"
@@ -1288,7 +1425,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 202, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 1 - Sensor State"
+    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_replacement:
     title: "Supply Channel 1 - Sensor State: Sensor Replacement"
@@ -1296,7 +1433,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 202, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 1 - Sensor State"
+    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_preheating:
     title: "Supply Channel 1 - Sensor State: Sensor Preheating"
@@ -1304,7 +1441,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 202, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 1 - Sensor State"
+    bitfield: supply_ch1_sensor_state
 
   supply_ch1_sensor_not_connected:
     title: "Supply Channel 1 - Sensor State: Not Connected"
@@ -1312,7 +1449,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 202, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 1 - Sensor State"
+    bitfield: supply_ch1_sensor_state
 
   supply_ch1_alerts:
     title: "Supply Channel 1 - Alerts"
@@ -1505,7 +1642,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 221, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 2 - Sensor Capability"
+    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_relative_humidity:
     title: "Supply Channel 2 - Sensor Capability: Relative Humidity"
@@ -1513,7 +1650,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 221, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 2 - Sensor Capability"
+    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_voc:
     title: "Supply Channel 2 - Sensor Capability: VOC"
@@ -1521,7 +1658,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 221, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 2 - Sensor Capability"
+    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_carbon_dioxide:
     title: "Supply Channel 2 - Sensor Capability: Carbon Dioxide"
@@ -1529,7 +1666,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 221, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 2 - Sensor Capability"
+    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_provides_barometric_pressure:
     title: "Supply Channel 2 - Sensor Capability: Barometric Pressure"
@@ -1537,7 +1674,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 221, encoding: bit, bit: 4 }
-    bitfield: "Supply Channel 2 - Sensor Capability"
+    bitfield: supply_ch2_sensor_capability
 
   supply_ch2_sensor_problem:
     title: "Supply Channel 2 - Sensor State: Sensor Problem"
@@ -1545,7 +1682,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 222, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 2 - Sensor State"
+    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_replacement:
     title: "Supply Channel 2 - Sensor State: Sensor Replacement"
@@ -1553,7 +1690,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 222, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 2 - Sensor State"
+    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_preheating:
     title: "Supply Channel 2 - Sensor State: Sensor Preheating"
@@ -1561,7 +1698,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 222, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 2 - Sensor State"
+    bitfield: supply_ch2_sensor_state
 
   supply_ch2_sensor_not_connected:
     title: "Supply Channel 2 - Sensor State: Not Connected"
@@ -1569,7 +1706,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 222, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 2 - Sensor State"
+    bitfield: supply_ch2_sensor_state
 
   supply_ch2_alerts:
     title: "Supply Channel 2 - Alerts"
@@ -1762,7 +1899,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 241, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 3 - Sensor Capability"
+    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_relative_humidity:
     title: "Supply Channel 3 - Sensor Capability: Relative Humidity"
@@ -1770,7 +1907,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 241, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 3 - Sensor Capability"
+    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_voc:
     title: "Supply Channel 3 - Sensor Capability: VOC"
@@ -1778,7 +1915,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 241, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 3 - Sensor Capability"
+    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_carbon_dioxide:
     title: "Supply Channel 3 - Sensor Capability: Carbon Dioxide"
@@ -1786,7 +1923,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 241, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 3 - Sensor Capability"
+    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_provides_barometric_pressure:
     title: "Supply Channel 3 - Sensor Capability: Barometric Pressure"
@@ -1794,7 +1931,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 241, encoding: bit, bit: 4 }
-    bitfield: "Supply Channel 3 - Sensor Capability"
+    bitfield: supply_ch3_sensor_capability
 
   supply_ch3_sensor_problem:
     title: "Supply Channel 3 - Sensor State: Sensor Problem"
@@ -1802,7 +1939,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 242, encoding: bit, bit: 0 }
-    bitfield: "Supply Channel 3 - Sensor State"
+    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_replacement:
     title: "Supply Channel 3 - Sensor State: Sensor Replacement"
@@ -1810,7 +1947,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 242, encoding: bit, bit: 1 }
-    bitfield: "Supply Channel 3 - Sensor State"
+    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_preheating:
     title: "Supply Channel 3 - Sensor State: Sensor Preheating"
@@ -1818,7 +1955,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 242, encoding: bit, bit: 2 }
-    bitfield: "Supply Channel 3 - Sensor State"
+    bitfield: supply_ch3_sensor_state
 
   supply_ch3_sensor_not_connected:
     title: "Supply Channel 3 - Sensor State: Not Connected"
@@ -1826,7 +1963,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 242, encoding: bit, bit: 3 }
-    bitfield: "Supply Channel 3 - Sensor State"
+    bitfield: supply_ch3_sensor_state
 
   supply_ch3_alerts:
     title: "Supply Channel 3 - Alerts"
@@ -2019,7 +2156,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 261, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 1 - Sensor Capability"
+    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_relative_humidity:
     title: "Extract Channel 1 - Sensor Capability: Relative Humidity"
@@ -2027,7 +2164,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 261, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 1 - Sensor Capability"
+    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_voc:
     title: "Extract Channel 1 - Sensor Capability: VOC"
@@ -2035,7 +2172,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 261, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 1 - Sensor Capability"
+    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_carbon_dioxide:
     title: "Extract Channel 1 - Sensor Capability: Carbon Dioxide"
@@ -2043,7 +2180,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 261, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 1 - Sensor Capability"
+    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_provides_barometric_pressure:
     title: "Extract Channel 1 - Sensor Capability: Barometric Pressure"
@@ -2051,7 +2188,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 261, encoding: bit, bit: 4 }
-    bitfield: "Extract Channel 1 - Sensor Capability"
+    bitfield: extract_ch1_sensor_capability
 
   extract_ch1_sensor_problem:
     title: "Extract Channel 1 - Sensor State: Sensor Problem"
@@ -2059,7 +2196,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 262, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 1 - Sensor State"
+    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_replacement:
     title: "Extract Channel 1 - Sensor State: Sensor Replacement"
@@ -2067,7 +2204,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 262, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 1 - Sensor State"
+    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_preheating:
     title: "Extract Channel 1 - Sensor State: Sensor Preheating"
@@ -2075,7 +2212,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 262, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 1 - Sensor State"
+    bitfield: extract_ch1_sensor_state
 
   extract_ch1_sensor_not_connected:
     title: "Extract Channel 1 - Sensor State: Not Connected"
@@ -2083,7 +2220,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 262, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 1 - Sensor State"
+    bitfield: extract_ch1_sensor_state
 
   extract_ch1_alerts:
     title: "Extract Channel 1 - Alerts"
@@ -2276,7 +2413,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 281, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 2 - Sensor Capability"
+    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_relative_humidity:
     title: "Extract Channel 2 - Sensor Capability: Relative Humidity"
@@ -2284,7 +2421,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 281, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 2 - Sensor Capability"
+    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_voc:
     title: "Extract Channel 2 - Sensor Capability: VOC"
@@ -2292,7 +2429,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 281, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 2 - Sensor Capability"
+    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_carbon_dioxide:
     title: "Extract Channel 2 - Sensor Capability: Carbon Dioxide"
@@ -2300,7 +2437,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 281, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 2 - Sensor Capability"
+    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_provides_barometric_pressure:
     title: "Extract Channel 2 - Sensor Capability: Barometric Pressure"
@@ -2308,7 +2445,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 281, encoding: bit, bit: 4 }
-    bitfield: "Extract Channel 2 - Sensor Capability"
+    bitfield: extract_ch2_sensor_capability
 
   extract_ch2_sensor_problem:
     title: "Extract Channel 2 - Sensor State: Sensor Problem"
@@ -2316,7 +2453,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 282, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 2 - Sensor State"
+    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_replacement:
     title: "Extract Channel 2 - Sensor State: Sensor Replacement"
@@ -2324,7 +2461,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 282, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 2 - Sensor State"
+    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_preheating:
     title: "Extract Channel 2 - Sensor State: Sensor Preheating"
@@ -2332,7 +2469,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 282, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 2 - Sensor State"
+    bitfield: extract_ch2_sensor_state
 
   extract_ch2_sensor_not_connected:
     title: "Extract Channel 2 - Sensor State: Not Connected"
@@ -2340,7 +2477,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 282, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 2 - Sensor State"
+    bitfield: extract_ch2_sensor_state
 
   extract_ch2_alerts:
     title: "Extract Channel 2 - Alerts"
@@ -2533,7 +2670,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 301, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 3 - Sensor Capability"
+    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_relative_humidity:
     title: "Extract Channel 3 - Sensor Capability: Relative Humidity"
@@ -2541,7 +2678,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 301, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 3 - Sensor Capability"
+    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_voc:
     title: "Extract Channel 3 - Sensor Capability: VOC"
@@ -2549,7 +2686,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 301, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 3 - Sensor Capability"
+    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_carbon_dioxide:
     title: "Extract Channel 3 - Sensor Capability: Carbon Dioxide"
@@ -2557,7 +2694,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 301, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 3 - Sensor Capability"
+    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_provides_barometric_pressure:
     title: "Extract Channel 3 - Sensor Capability: Barometric Pressure"
@@ -2565,7 +2702,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 301, encoding: bit, bit: 4 }
-    bitfield: "Extract Channel 3 - Sensor Capability"
+    bitfield: extract_ch3_sensor_capability
 
   extract_ch3_sensor_problem:
     title: "Extract Channel 3 - Sensor State: Sensor Problem"
@@ -2573,7 +2710,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 302, encoding: bit, bit: 0 }
-    bitfield: "Extract Channel 3 - Sensor State"
+    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_replacement:
     title: "Extract Channel 3 - Sensor State: Sensor Replacement"
@@ -2581,7 +2718,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 302, encoding: bit, bit: 1 }
-    bitfield: "Extract Channel 3 - Sensor State"
+    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_preheating:
     title: "Extract Channel 3 - Sensor State: Sensor Preheating"
@@ -2589,7 +2726,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 302, encoding: bit, bit: 2 }
-    bitfield: "Extract Channel 3 - Sensor State"
+    bitfield: extract_ch3_sensor_state
 
   extract_ch3_sensor_not_connected:
     title: "Extract Channel 3 - Sensor State: Not Connected"
@@ -2597,7 +2734,7 @@ signals:
     type: bool
     access: read_only
     binding: { space: input, address: 302, encoding: bit, bit: 3 }
-    bitfield: "Extract Channel 3 - Sensor State"
+    bitfield: extract_ch3_sensor_state
 
   extract_ch3_alerts:
     title: "Extract Channel 3 - Alerts"
