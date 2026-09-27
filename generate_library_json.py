@@ -23,13 +23,18 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import pathlib
 import re
 import sys
 
 HERE = pathlib.Path(__file__).parent
-LIBRARY = pathlib.Path(
-    r"C:\Users\neits\Documents\repos\software\sw_3smcenter\3SModbus\DeviceLibrary")
+# Where a 3SModbus DeviceLibrary checkout lives, used only to validate the
+# generated profile against its own schemas. Override with DEVICE_LIBRARY;
+# validation is skipped when it is not reachable, so this is never required.
+LIBRARY = pathlib.Path(os.environ.get(
+    "DEVICE_LIBRARY",
+    r"..\software\sw_3smcenter\3SModbus\DeviceLibrary"))
 
 ACCESS_OUT = {"read_only": "readOnly", "write_only": "writeOnly",
               "read_write": "readWrite"}
