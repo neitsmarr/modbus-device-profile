@@ -768,3 +768,60 @@ A packed register genuinely is not a property: its bits are.
   id per property would mirror how `bitfields` now works, robust to addresses
   moving, at the cost of one short line per property. Declaring sections as
   address ranges instead avoids that line but drifts whenever a register moves.
+
+## D14 — D9 re-examined against version churn, and still stands
+
+Revisited after D10-D13 moved a lot of ground: is one file for both semantics
+and protocol still right?
+
+**The layer boundary is sharper than it was, so the question is fair.** D10 gave
+the property a semantic `type` and `storage` and pushed encoding into the
+binding; D12 made the binding a regular `{space, address, encoding}` record;
+D13 added `bitfields:`, which is purely a protocol and documentation entity.
+Three of the five top-level sections -- `access`, `bitfields`, `procedures` --
+are now entirely protocol.
+
+**But the measured split did not move: 82%, against 83% at D9.** The only
+protocol content at property level is `binding` (277), `bitfield` (87) and
+`on_write` (23), against 1746 semantic key occurrences.
+
+**The decisive new evidence is version churn.** D9 measured sharing across
+devices; the open question was sharing across firmware versions of one device,
+where a stable semantic model with moving addresses would favour splitting.
+Measured over the library's four version steps (DSCDG0-4 1.40 -> 1.50 -> 1.60,
+TSVCT 1.0 -> 1.20 -> 1.30):
+
+| change between consecutive versions | count |
+|---|---|
+| register unchanged | 166 |
+| address changed, semantics identical | **2** |
+| semantics changed, address identical | 6 |
+| both changed | 1 |
+| register added | 34 |
+| register removed | 76 |
+
+Address-only churn is 2 events out of 112 changes across four revisions. What
+actually churns is whole registers appearing and disappearing -- 110 events --
+and every one of those touches both layers at once. Splitting by layer would
+optimise the case that essentially never happens while making the common case
+require coordinated edits in two files that can drift apart.
+
+So D9 holds, now on evidence rather than on argument.
+
+**One of D9's arguments was wrong, and fixing it removed a live hazard.** D9's
+strongest claim was that a split would let a mistyped name silently turn a
+register into an internal property, since D8 made a missing binding mean
+internal. That hazard was never about splitting: it exists today in the single
+file. Delete a `binding:` line by accident and the register disappears from the
+map with no complaint, because absence was carrying meaning.
+
+Internal is now stated, not inferred. A property must have either a `binding`
+or `internal: true`, never both, and `internal: false` may not be written. A
+lost binding line is now an error instead of a silent deletion from the register
+map. This is worth having regardless of the split question, and it means the
+decision above rests on the churn data alone.
+
+**Unchanged advice on size.** At 3009 lines the file is unwieldy, and the answer
+is still D9's: split by subsystem, never by layer, because a layer split
+separates the one pair -- a property's meaning and its address -- that is always
+read together.

@@ -2933,6 +2933,7 @@ signals:
     title: "Supply Fan Calibration Offset"
     kind: setting
     type: real
+    internal: true
     unit: "%"
     range: [-10.0, 10.0]
     scale: 0.1
@@ -2944,6 +2945,7 @@ signals:
     title: "NVM Write Count"
     kind: measurement
     type: int
+    internal: true
     access: read_only
     unit: "writes"
     range: [0, 4294967295]

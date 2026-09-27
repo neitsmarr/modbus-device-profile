@@ -209,6 +209,10 @@
       "required": ["title", "kind", "type"],
       "allOf": [
         {
+          "description": "Every property says where it lives: a binding, or internal: true. Absence of a binding must never be what makes a property internal -- a deleted binding line would then silently remove a register from the map instead of failing.",
+          "oneOf": [{ "required": ["binding"] }, { "required": ["internal"] }]
+        },
+        {
           "description": "type and the member map have to agree: an enum needs enum members, a flags value needs flag bits, and nothing else may carry either.",
           "if": { "properties": { "type": { "const": "enum" } }, "required": ["type"] },
           "then": { "required": ["enum"] },
@@ -292,7 +296,11 @@
       "properties": {
         "binding": {
           "$ref": "#/$defs/binding",
-          "description": "Where the value lives on the Modbus interface. OMITTED for an internal property: one that exists on the device but is not exposed on the bus (D8). Such a property is still generated into firmware's tables; it is simply absent from the register map, the documentation's map section, and anything a commissioning tool can reach."
+          "description": "Where the value lives on the Modbus interface. Absent only on a property marked internal: true: one that exists on the device but is not exposed on the bus (D8). Such a property is still generated into firmware's tables; it is simply absent from the register map, the documentation's map section, and anything a commissioning tool can reach."
+        },
+        "internal": {
+          "description": "True for a property that exists on the device but is not exposed on the bus (D8). Mutually exclusive with a binding, and required for such a property rather than inferred from a missing binding (D14).",
+          "const": true
         },
         "kind": {
           "description": "What sort of thing this is, which is what the generators switch on. 'setting' is persisted in non-volatile memory and has a factory default; 'measurement' is produced by the device and is volatile; 'command' is invoked and stores nothing. Explicit rather than inferred, because an internal property has no table or access pattern to infer it from.",

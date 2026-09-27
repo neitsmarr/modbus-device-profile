@@ -153,6 +153,13 @@ def main() -> int:
     reject("condition with both equals and in",
            lambda d: proc(d, "rescan_sensor_channels")["outcome"]["success"].update({"in": ["complete"]}))
 
+    reject("a lost binding line, with nothing saying internal",
+           lambda d: sig(d, "ventilation_level").pop("binding"))
+    reject("both a binding and internal: true",
+           lambda d: sig(d, "ventilation_level").update({"internal": True}))
+    reject("internal: false written out",
+           lambda d: sig(d, "nvm_write_count").update({"internal": False}))
+
     print("-- must stay legal")
     accept("uppercase enum member", lambda d: sig(d, "operating_mode")["enum"].update({9: "ECO"}))
     def bool_on_coil(d):
@@ -180,8 +187,9 @@ def main() -> int:
     accept("storage declared wider than the range needs",
            lambda d: sig(d, "ventilation_level").update({"storage": "uint32"}))
     accept("hidden service register", lambda d: sig(d, "internal_voltage_3v3").update({"hidden": True}))
-    accept("internal property with no binding (D8)",
-           lambda d: sig(d, "ventilation_level").pop("binding"))
+    accept("internal property, marked as such (D8, D14)",
+           lambda d: sig(d, "ventilation_level").pop("binding") and None or
+                     sig(d, "ventilation_level").update({"internal": True}))
     accept("the same address number reused in a different space",
            lambda d: sig(d, "ventilation_level")["binding"].update({"space": "input"}))
     accept("an outcome keyed on a single error bit",
