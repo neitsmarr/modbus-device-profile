@@ -35,7 +35,6 @@ SCHEMA = HERE / "device-profile.schema.json"
 EXPR_KEYWORDS = {
     "and", "or", "not", "in", "any", "all",
     "true", "false", "null",
-    "contains",          # flags membership: <signal> contains <member>
 }
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -66,22 +65,30 @@ class Report:
         return 1 if self.errors else 0
 
 
+def _key(k):
+    if k is True:
+        return "true"
+    if k is False:
+        return "false"
+    return str(k)
+
+
 def normalize(node):
     """Stringify enum/flags keys before schema validation.
 
-    YAML parses `0: none` as an integer key. JSON has no integer keys, and a
-    JSON Schema `propertyNames` pattern only constrains strings -- so with
-    integer keys the enum and flag key rules silently pass anything, including
-    a bit index of 16. Canonicalising to strings here makes them enforceable
-    and matches what any JSON form of the profile will hold.
+    YAML parses `0: none` as an integer key and `false: disabled` as a boolean
+    one. JSON has no such keys, and a JSON Schema `propertyNames` pattern only
+    constrains strings -- so left alone, the enum and label key rules silently
+    pass anything. Canonicalising here makes them enforceable and matches what
+    any JSON form of the profile will hold.
 
     This changes key types only. Per D5 it may not, and does not, change which
     signals exist, what they are called, or where they live.
     """
     if isinstance(node, dict):
         return {k: (
-            {str(bk): bv for bk, bv in v.items()}
-            if k in ("enum", "flags") and isinstance(v, dict) else normalize(v)
+            {_key(bk): bv for bk, bv in v.items()}
+            if k in ("enum", "labels") and isinstance(v, dict) else normalize(v)
         ) for k, v in node.items()}
     if isinstance(node, list):
         return [normalize(v) for v in node]
@@ -139,10 +146,9 @@ def check_references(doc, rep: Report) -> None:
     enum_members: dict[str, set[str]] = {}
     for name, sig in signals.items():
         members = set((sig.get("enum") or {}).values())
-        members |= set((sig.get("flags") or {}).values())
+        members |= set((sig.get("labels") or {}).values())
         for variant in sig.get("variants") or []:
             members |= set((variant.get("enum") or {}).values())
-            members |= set((variant.get("flags") or {}).values())
         if members:
             enum_members[name] = members
     all_members = {m for ms in enum_members.values() for m in ms}
@@ -231,7 +237,6 @@ ENCODINGS_FOR = {
     "int":   {"uint16", "int16", "uint32", "int32", "uint64", "int64"},
     "real":  {"float32", "float64", "uint16", "int16", "uint32", "int32"},
     "enum":  {"uint16", "uint32"},
-    "flags": {"uint16", "uint32"},
     "text":  {"chars"},
 }
 
@@ -295,15 +300,6 @@ def check_types(doc, rep: Report) -> None:
                         f"{span[0]:.0f}..{span[1]:.0f} after scale, which does not fit "
                         f"encoding '{enc}' ({c[0]}..{c[1]})"
                     )
-            # do all the flag bits reach the wire?
-            if stype == "flags" and enc in ("uint16", "uint32"):
-                width = 16 if enc == "uint16" else 32
-                top = max((int(b) for b in (sig.get("flags") or {})), default=0)
-                if top >= width:
-                    rep.error(
-                        f"signals/{name}: flag bit {top} is outside a {width}-bit "
-                        f"encoding '{enc}'"
-                    )
             # does the enum fit?
             if stype == "enum" and enc in WIDTH_CAPACITY:
                 top = max((int(v) for v in (sig.get("enum") or {})), default=0)
@@ -319,9 +315,6 @@ def check_types(doc, rep: Report) -> None:
         elif stype == "enum":
             top = max((int(v) for v in (sig.get("enum") or {})), default=0)
             derived = narrowest_width(0, top)
-        elif stype == "flags":
-            top = max((int(b) for b in (sig.get("flags") or {})), default=0)
-            derived = "uint32" if top >= 16 else ("uint16" if top >= 8 else "uint8")
         elif span:
             derived = narrowest_width(*span)
         elif binding and binding.get("encoding") in WIDTH_CAPACITY:
@@ -343,6 +336,70 @@ def check_types(doc, rep: Report) -> None:
 
         if stype == "text" and "max_length" not in sig:
             rep.error(f"signals/{name}: type 'text' needs max_length")
+
+
+def check_addresses(doc, rep: Report) -> None:
+    """Address collisions, bit collisions, and bitfield naming.
+
+    These matter more since D11: a packed status register is no longer one
+    property with a bit map, it is N bool properties sharing an address. That
+    makes the address the grouping key -- and makes a mistyped address or a
+    repeated bit a silent, plausible hand-editing error (D5).
+    """
+    signals = doc.get("signals") or {}
+    whole: dict[tuple, str] = {}          # (table, addr) -> property owning the register
+    bits: dict[tuple, str] = {}           # (table, addr, bit) -> property
+    fields: dict[tuple, set] = {}         # (table, addr) -> bitfield names seen
+
+    for name in sorted(signals):
+        sig = signals[name]
+        binding = sig.get("binding")
+        if not binding:
+            continue
+        table = next((t for t in ("holding", "input", "coil", "discrete") if t in binding), None)
+        if table is None:
+            continue
+        addr = binding[table]
+        if "bit" in binding:
+            key = (table, addr, binding["bit"])
+            if key in bits:
+                rep.error(
+                    f"signals/{name}: bit {binding['bit']} of {table} {addr} is already "
+                    f"taken by '{bits[key]}'"
+                )
+            else:
+                bits[key] = name
+            fields.setdefault((table, addr), set()).add(sig.get("bitfield"))
+        else:
+            key = (table, addr)
+            if key in whole:
+                rep.error(
+                    f"signals/{name}: {table} register {addr} is already used by "
+                    f"'{whole[key]}'"
+                )
+            else:
+                whole[key] = name
+
+    # a register cannot be both a packed bit field and a whole value
+    for (table, addr) in fields:
+        if (table, addr) in whole:
+            rep.error(
+                f"{table} register {addr} is used both as a whole value "
+                f"('{whole[(table, addr)]}') and as packed bits"
+            )
+
+    for (table, addr), names in sorted(fields.items()):
+        named = {n for n in names if n}
+        if len(named) > 1:
+            rep.error(
+                f"{table} register {addr}: bits disagree about the packed register's "
+                f"name ({', '.join(sorted(named))})"
+            )
+        if None in names and named:
+            rep.warn(
+                f"{table} register {addr}: some bits give a bitfield name and some "
+                f"do not"
+            )
 
 
 def check_internal_properties(doc, rep: Report) -> None:
@@ -415,6 +472,7 @@ def main(argv: list[str]) -> int:
     check_schema(doc, rep)
     check_references(doc, rep)
     check_types(doc, rep)
+    check_addresses(doc, rep)
     check_internal_properties(doc, rep)
     index = reverse_index(doc)
     check_reread_dependents(doc, index, rep)

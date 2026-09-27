@@ -92,12 +92,18 @@ def main() -> int:
            lambda d: sig(d, "operating_mode").pop("enum"))
     reject("enum map on a non-enum type",
            lambda d: sig(d, "ventilation_level").update({"enum": {0: "off"}}))
-    reject("type flags without a flags map",
-           lambda d: sig(d, "supply_fan_state").pop("flags"))
+    reject("labels on something that is not a bool",
+           lambda d: sig(d, "operating_mode").update({"labels": {"false": "a", "true": "b"}}))
+    reject("bool labels missing the true state",
+           lambda d: sig(d, "client_enable").update({"labels": {"false": "disabled"}}))
+    reject("bitfield on a property that is not a bit",
+           lambda d: sig(d, "ventilation_level").update({"bitfield": "Some Register"}))
+    reject("a non-bool claiming a bit position",
+           lambda d: sig(d, "ventilation_level")["binding"].update({"bit": 2}))
     reject("scale on an enum",
            lambda d: sig(d, "operating_mode").update({"scale": 0.1}))
-    reject("decimals on a flags word",
-           lambda d: sig(d, "supply_fan_state").update({"decimals": 1}))
+    reject("decimals on a bool",
+           lambda d: sig(d, "client_enable").update({"decimals": 1}))
     reject("max_length on a non-text property",
            lambda d: sig(d, "ventilation_level").update({"max_length": 8}))
     reject("text without max_length",
@@ -107,14 +113,13 @@ def main() -> int:
     reject("storage width that is not a real width",
            lambda d: sig(d, "ventilation_level").update({"storage": "int24"}))
 
-    print("-- enum and flags")
-    reject("both enum and flags on one signal",
-           lambda d: sig(d, "supply_fan_state").update({"enum": {0: "ok"}}))
-    reject("flag bit index above 15",
-           lambda d: sig(d, "supply_fan_state")["flags"].update({16: "impossible_bit"}))
+    print("-- enum and labels")
     reject("enum member with a space",
            lambda d: sig(d, "operating_mode")["enum"].update({9: "not valid"}))
-    reject("empty flags map", lambda d: sig(d, "supply_fan_state").update({"flags": {}}))
+    reject("label with a space",
+           lambda d: sig(d, "client_enable")["labels"].update({True: "not valid"}))
+    reject("bit position above 15",
+           lambda d: sig(d, "error_memory_fault")["binding"].update({"bit": 20}))
 
     print("-- presentation")
     reject("range with three numbers", lambda d: sig(d, "ventilation_level").update({"range": [1, 2, 3]}))
@@ -135,8 +140,8 @@ def main() -> int:
     reject("duplicate entries in reread",
            lambda d: proc(d, "rescan_sensor_channels")["steps"][2].update(
                {"reread": ["supply_ch1_sensor_capability", "supply_ch1_sensor_capability"]}))
-    reject("condition with both equals and contains",
-           lambda d: proc(d, "rescan_sensor_channels")["outcome"]["success"].update({"contains": "complete"}))
+    reject("condition with both equals and in",
+           lambda d: proc(d, "rescan_sensor_channels")["outcome"]["success"].update({"in": ["complete"]}))
 
     print("-- must stay legal")
     accept("uppercase enum member", lambda d: sig(d, "operating_mode")["enum"].update({9: "ECO"}))
@@ -165,9 +170,9 @@ def main() -> int:
     accept("hidden service register", lambda d: sig(d, "internal_voltage_3v3").update({"hidden": True}))
     accept("internal property with no binding (D8)",
            lambda d: sig(d, "ventilation_level").pop("binding"))
-    accept("contains in a precondition-bearing outcome",
+    accept("an outcome keyed on a single error bit",
            lambda d: proc(d, "swap_air_chains")["outcome"].update(
-               {"failure": {"signal": "device_status_errors", "contains": "memory_fault"}}))
+               {"failure": {"signal": "error_memory_fault", "equals": True}}))
     def use_variants(d):
         s = sig(d, "supply_ch1_voc_level")
         for k in ("unit", "scale", "range", "decimals"):

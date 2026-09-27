@@ -86,14 +86,6 @@
       "additionalProperties": { "$ref": "#/$defs/enum_member" }
     },
 
-    "flag_map": {
-      "type": "object",
-      "description": "Bit index -> member name, for a register where several members can be true at once. Distinct from enum because the device genuinely reports combinations: a sensor channel carrying both temperature and humidity, a status word with two faults raised. Tested with 'contains' / 'not contains' rather than '=='.",
-      "minProperties": 1,
-      "propertyNames": { "pattern": "^(0|[1-9]|1[0-5])$" },
-      "additionalProperties": { "$ref": "#/$defs/enum_member" }
-    },
-
     "access": {
       "type": "object",
       "additionalProperties": false,
@@ -175,7 +167,10 @@
           "description": "Decimal places to show. Display only -- scale already fixes the value."
         },
         "enum": { "$ref": "#/$defs/enum_map" },
-        "flags": { "$ref": "#/$defs/flag_map" }
+        "display": {
+          "description": "How an int is rendered. 'version' means the raw bytes shown as hex and dot-joined with the leading zero trimmed, so 0x0130 reads as 1.30 -- which is 50 of the 55 bytewise decoders in the company library. Display only: the value is an integer.",
+          "enum": ["decimal", "hex", "version"]
+        }
       }
     },
 
@@ -191,16 +186,26 @@
           "else": { "not": { "required": ["enum"] } }
         },
         {
-          "if": { "properties": { "type": { "const": "flags" } }, "required": ["type"] },
-          "then": { "required": ["flags"] },
-          "else": { "not": { "required": ["flags"] } }
+          "description": "labels name a bool's two states, for display and for comparison in expressions. Only a bool has them.",
+          "if": { "properties": { "type": { "const": "bool" } }, "required": ["type"] },
+          "else": { "not": { "required": ["labels"] } }
+        },
+        {
+          "description": "A bitfield name only means something for a bool packed into a bit.",
+          "if": { "required": ["bitfield"] },
+          "then": {
+            "required": ["type", "binding"],
+            "properties": {
+              "type": { "const": "bool" },
+              "binding": { "required": ["encoding", "bit"], "properties": { "encoding": { "const": "bit" } } }
+            }
+          }
         },
         {
           "description": "scale and decimals describe a continuous quantity; they are meaningless on anything else.",
           "if": {
             "anyOf": [
               { "properties": { "type": { "const": "enum" } }, "required": ["type"] },
-              { "properties": { "type": { "const": "flags" } }, "required": ["type"] },
               { "properties": { "type": { "const": "bool" } }, "required": ["type"] },
               { "properties": { "type": { "const": "text" } }, "required": ["type"] }
             ]
@@ -238,15 +243,15 @@
                 { "required": ["scale"] },
                 { "required": ["offset"] },
                 { "required": ["range"] },
-                { "required": ["enum"] },
-                { "required": ["flags"] }
+                { "required": ["enum"] }
               ]
             }
           }
         },
         {
-          "description": "A register is either a set of mutually exclusive states or a set of independent bits, never both.",
-          "not": { "required": ["enum", "flags"] }
+          "description": "Only a bool may claim a bit position inside a register.",
+          "if": { "properties": { "binding": { "required": ["bit"] } }, "required": ["binding"] },
+          "then": { "properties": { "type": { "const": "bool" } }, "required": ["type"] }
         }
       ],
       "properties": {
@@ -259,8 +264,8 @@
           "enum": ["setting", "measurement", "command"]
         },
         "type": {
-          "description": "What the value IS, independent of how any transport carries it. 'bool' is a truth value; 'int' a whole quantity; 'real' a continuous one; 'enum' one of named members; 'flags' a set of named bits; 'text' a character string. This is the type firmware should declare -- bool as bool, enum as an enum typedef -- and it is deliberately NOT the register width: a real may travel as float32 over two registers or as a scaled int16 over one, and a bool as a coil, a discrete input or a bit in a register.",
-          "enum": ["bool", "int", "real", "enum", "flags", "text"]
+          "description": "What the value IS, independent of how any transport carries it. 'bool' is a truth value; 'int' a whole quantity; 'real' a continuous one; 'enum' one of named members; 'text' a character string. A set of independent bits is NOT a type: each bit is its own bool property bound to a bit of a register (D11). This is the type firmware should declare -- bool as bool, enum as an enum typedef -- and it is deliberately NOT the register width: a real may travel as float32 over two registers or as a scaled int16 over one, and a bool as a coil, a discrete input or a bit in a register.",
+          "enum": ["bool", "int", "real", "enum", "text"]
         },
         "storage": {
           "description": "Width used when the value is persisted or held in a live-data struct. Omit it and the width is derived from range (and scale, for a real), which is the normal case; declare it only when the device stores the value wider than the range needs, or when there is no range to derive from. Checked against the range either way.",
@@ -293,7 +298,22 @@
         "step": true,
         "decimals": true,
         "enum": true,
-        "flags": true,
+        "display": true,
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["false", "true"],
+          "description": "Names for a bool's two states, e.g. { false: disabled, true: enabled }. What documentation and a commissioning tool show, and what an expression may compare against.",
+          "properties": {
+            "false": { "$ref": "#/$defs/enum_member" },
+            "true": { "$ref": "#/$defs/enum_member" }
+          }
+        },
+        "bitfield": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human name of the packed register this bit belongs to, such as Device Status - Errors. Bits group into a register by their shared address; this only supplies the group's name, and every bit at one address must give the same name."
+        },
 
         "present_when": { "$ref": "#/$defs/expression" },
         "valid_when": { "$ref": "#/$defs/expression" },
@@ -317,7 +337,7 @@
               "step": true,
               "decimals": true,
               "enum": true,
-              "flags": true
+              "display": true
             }
           }
         },
@@ -369,18 +389,11 @@
     "condition": {
       "type": "object",
       "required": ["signal"],
-      "oneOf": [
-        { "required": ["equals"] },
-        { "required": ["in"] },
-        { "required": ["contains"] },
-        { "required": ["not_contains"] }
-      ],
+      "oneOf": [{ "required": ["equals"] }, { "required": ["in"] }],
       "properties": {
         "signal": { "$ref": "#/$defs/signal_ref" },
         "equals": { "$ref": "#/$defs/value" },
-        "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } },
-        "contains": { "$ref": "#/$defs/enum_member", "description": "For a flags signal: that bit is set." },
-        "not_contains": { "$ref": "#/$defs/enum_member" }
+        "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } }
       }
     },
 
@@ -426,8 +439,6 @@
             "signal": true,
             "equals": true,
             "in": true,
-            "contains": true,
-            "not_contains": true,
             "timeout_ms": { "type": "number", "exclusiveMinimum": 0 },
             "poll_ms": { "type": "number", "exclusiveMinimum": 0 }
           }

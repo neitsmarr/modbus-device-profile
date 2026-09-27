@@ -588,3 +588,87 @@ registers are still `int` when they are really packed hex bytes (noted in D6),
 and `text` with a `chars` encoding may or may not be the right home for them.
 Whether a real should ever be stored as `float32` on-device while travelling as
 a scaled integer is untested — the format allows it, nothing exercises it.
+
+## D11 — Booleans are booleans; a bit field is not a type
+
+Three corrections, all the same mistake: the type system described the Modbus
+representation instead of the device.
+
+### Two-member enums become bool
+
+D10 kept 24 two-member enums as enums, arguing an enum can grow a third member.
+That was wrong. `disabled`/`enabled` is a boolean whose states have names; the
+names are for display, not evidence of a third state. Firmware wants `bool`.
+
+`type: bool` now takes an optional `labels: { false: disabled, true: enabled }`,
+which is what documentation and a commissioning tool show and what an expression
+compares against, so `client_enable == enabled` still reads the same while the
+generated code gets a `bool`.
+
+The test is whether one member is the *absence or negation* of the other.
+Twenty pairs are: enabled/disabled, installed/not, connected/disconnected,
+low/high, normal/swapped, automatic/overwrite, normally open/closed, idle/reset,
+idle/rescan. Two pairs are not, and stay enums, because they are peer
+alternatives that could plausibly gain a third:
+`analog_output` / `modbus` for fan control source, and `softstart` / `kickstart`.
+
+### A status register is N bool properties, not one flags value
+
+In the existing products these registers are internally one boolean property per
+flag, and the Modbus register is a packed *view* of them. The profile now says
+that: each bit is its own bool property with
+`binding: { input: 1, encoding: bit, bit: 0 }`, and the register is recovered by
+grouping bools that share an address — derived, per D1, not declared.
+
+`type: flags`, the `flag_map` definition, the `contains` / `not contains`
+expression operator and the `contains` / `not_contains` condition forms are all
+**removed**. 19 flags registers became 87 bool properties, and 114 expressions
+using `contains` became plain boolean references:
+
+    before:  present_when: supply_ch1_sensor_capability contains temperature
+             valid_when:   ... and supply_ch1_sensor_state not contains sensor_problem
+    after:   present_when: supply_ch1_provides_temperature
+             valid_when:   ... and not supply_ch1_sensor_problem
+
+**This shrinks the format.** The most load-bearing part of the file lost an
+operator, which matters for D3: the grammar no longer needs set membership, only
+comparison, boolean connectives, and a bare boolean reference. A bit is now an
+ordinary property with its own title, and each one is individually documentable.
+
+The packed register's human name has nowhere to live once the register is not a
+property, so `bitfield: "Device Status - Errors"` carries it on each bit.
+Grouping is by address; the field only supplies the name, and every bit at one
+address must give the same one — checked.
+
+**Four new checks, all verified to fire.** They matter more now precisely
+because an address is shared by up to sixteen properties, making a mistyped
+address or a repeated bit a plausible hand-editing slip under D5:
+
+- two bools claiming the same bit of the same register
+- two properties claiming the same whole register (this check did not exist
+  before, and catches ordinary copy-paste address errors anywhere in the file)
+- bits at one address disagreeing about the packed register's name
+- a register used both as a whole value and as packed bits
+
+### Strings versus formatted integers
+
+The library settles this: of its 55 `bytewise` decoders, 50 are
+`hexadecimal` with separator `.` and leading zero trimmed — that is a *version
+display* of `0x0130` as "1.30", not text. Only 5 are `unicode`, on
+"Source code version - Temporary", a genuine string.
+
+So the two cases are different and are modelled differently:
+
+- a version is `type: int` with `display: version`. The value is an integer; only
+  its rendering is special. `display` also allows `decimal` and `hex`. Applied to
+  `hardware_version` and `firmware_version`.
+- a real string is `type: text` with `encoding: chars`, `count` registers and
+  `max_length` characters, two characters per register.
+
+**Scale.** 279 properties (up from 211), 3009 lines: 107 bool, 92 int, 49 real,
+31 enum. 87 of the bools are bit-bound across 19 packed registers.
+
+**Open.** `text` is still unexercised — this device exposes no string, so the
+character order within a register and whether trimming belongs in the profile at
+all are undecided. `display: version` describes the library's format but the
+profile does not say which byte is major and which minor.
