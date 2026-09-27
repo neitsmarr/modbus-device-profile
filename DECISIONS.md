@@ -367,3 +367,81 @@ boolean.
 modelled (only the pre-heater was confirmed); and the cross-check that a
 temperature source names a temperature-capable channel needs writing into
 `validate.py`.
+
+## D8 — The profile describes device properties, not Modbus registers
+
+**Decided.** The profile is a description of the device's properties. The Modbus
+binding is one attribute of a property, and a property may have none. A property
+with no binding exists on the device but is not on the bus.
+
+**Why this was nearly free.** Measured before changing anything: 83% of the
+average property body was already transport-neutral. Across 209 signals the only
+Modbus-specific content was the address, the raw `type`, and `scale`. Everything
+that carries meaning -- `unit`, `range`, `default`, `enum`, `flags`, `decimals`,
+`access`, and all of `present_when` / `valid_when` / `writable_when` /
+`constraints` / `variants` -- never mentioned a transport. The separation existed
+already; this decision only names it and allows the binding to be absent.
+
+Nothing in the conditional layer changed. Expressions, the D1 reverse index,
+constraints and procedures do not reference transports, so they were untouched.
+
+**Scope: persisted, published, or invocable.** A property belongs in the profile
+if it has a lifetime beyond one control cycle and an identity someone outside
+the firmware could ask about — settings, live data, commands. Working state does
+not: loop counters, filter accumulators, PID intermediates, scratch.
+
+Without that line the profile becomes a second copy of the firmware's internals,
+which must then track code that changes every sprint. That is D1's "two facts
+that must agree, and nothing can make them agree", at the scale of the whole
+firmware instead of one dependency edge.
+
+With it, the benefit holds even though an internal setting serves only *one*
+consumer: firmware generates one table from one source, instead of a generated
+table plus a parallel hand-maintained mechanism for the unexposed half. One
+mechanism per concept is worth it on its own.
+
+**`kind` is new, and the scope change forced it.** `setting` is persisted and has
+a factory default; `measurement` is produced by the device and is volatile;
+`command` is invoked and stores nothing. This is exactly what the three
+generators switch on. It must be explicit rather than inferred, because
+inference relied on which Modbus table a register sat in plus its access — and
+an internal property has no table. The existing 209 classified as 124 settings,
+83 measurements, 4 commands. The schema now enforces that a command is
+`write_only` and a measurement is `read_only` with no default.
+
+**Two checks became possible, and necessary.** Both exist only because a
+property can now be off-bus, and both were verified to fire:
+
+- A property that *is* on the bus may only be conditioned on properties that are
+  also on the bus. A client cannot evaluate `present_when` naming something it
+  cannot read. The reverse is fine: internal logic may look at anything.
+- A procedure step may only target a property with a binding. Procedures run
+  over the wire.
+
+**Deliberately not done: multi-transport.** A second transport (CAN, KNX) is not
+realistically planned, so the binding stays a single `binding:` rather than a map
+keyed by transport. The shape does not preclude adding one later.
+
+The encoding restructure that would prepare for it -- moving `scale`, raw
+`type`, and the raw values of `enum` / `flags` down into the binding, leaving
+only member names and engineering units at property level -- was considered and
+rejected for now. Its justification was a second transport: KNX DPT 9.001 is a
+16-bit float that cannot be expressed as "int16 × 0.1", and raw enum values
+differ per transport. The secondary argument, that it would help the firmware
+X-macro, does not hold up: whether `scale` sits inside `binding` or beside it is
+one dictionary lookup either way for a generator. So it would be 209 signals of
+churn for nothing. **If a second transport is ever committed, this is the first
+thing to do, and it must be preceded by writing out the real bindings for three
+or four properties by hand** -- D5's lesson was that `repeat` looked sound until
+its first realistic example demanded an escape hatch.
+
+**Naming.** The collection is still called `signals:`, not `properties:`, to
+avoid renaming 211 entries plus every `signal:` reference in procedures and the
+validator for a debatable gain. "Signal" is standard in this domain and covers
+settings, measurements and commands. Worth revisiting only if it starts
+misleading people.
+
+**Open.** What the real internal property list is — only two illustrative
+examples are in the file, marked as such, and the actual list must come from the
+firmware author. Also whether a setting may be volatile (session-only), which
+`kind: setting` currently forbids by implication.

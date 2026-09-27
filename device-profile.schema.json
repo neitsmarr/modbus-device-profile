@@ -179,8 +179,22 @@
     "signal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["binding"],
+      "required": ["title", "kind"],
       "allOf": [
+        {
+          "description": "A command is invoked, so it is written and never read back as state.",
+          "if": { "properties": { "kind": { "const": "command" } }, "required": ["kind"] },
+          "then": { "properties": { "access": { "const": "write_only" } }, "required": ["access"] }
+        },
+        {
+          "description": "A measurement is produced by the device: read-only, and a factory default is meaningless for it.",
+          "if": { "properties": { "kind": { "const": "measurement" } }, "required": ["kind"] },
+          "then": {
+            "properties": { "access": { "const": "read_only" } },
+            "required": ["access"],
+            "not": { "required": ["default"] }
+          }
+        },
         { "$ref": "#/$defs/presentation" },
         {
           "description": "Presentation comes from exactly one place. If variants are given, the signal must not also carry a top-level interpretation -- otherwise there are two answers and no rule for which wins.",
@@ -204,7 +218,14 @@
         }
       ],
       "properties": {
-        "binding": { "$ref": "#/$defs/binding" },
+        "binding": {
+          "$ref": "#/$defs/binding",
+          "description": "Where the value lives on the Modbus interface. OMITTED for an internal property: one that exists on the device but is not exposed on the bus (D8). Such a property is still generated into firmware's tables; it is simply absent from the register map, the documentation's map section, and anything a commissioning tool can reach."
+        },
+        "kind": {
+          "description": "What sort of thing this is, which is what the generators switch on. 'setting' is persisted in non-volatile memory and has a factory default; 'measurement' is produced by the device and is volatile; 'command' is invoked and stores nothing. Explicit rather than inferred, because an internal property has no table or access pattern to infer it from.",
+          "enum": ["setting", "measurement", "command"]
+        },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "access": {

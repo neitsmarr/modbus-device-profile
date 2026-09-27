@@ -224,6 +224,57 @@ def reverse_index(doc) -> dict[str, set[str]]:
     return index
 
 
+def check_internal_properties(doc, rep: Report) -> None:
+    """Checks that exist because a property may have no Modbus binding (D8)."""
+    signals = doc.get("signals") or {}
+    on_bus = {n for n, s in signals.items() if "binding" in s}
+
+    # A bus client cannot evaluate a condition that names something it cannot
+    # read. So a property reachable over Modbus may only depend on properties
+    # that are also reachable. The reverse is fine: internal logic may look at
+    # anything.
+    for name in sorted(on_bus):
+        sig = signals[name]
+        exprs = [sig[k] for k in ("present_when", "valid_when", "writable_when") if k in sig]
+        exprs += [v[k] for v in sig.get("variants") or [] for k in WHEN_KEYS if k in v]
+        exprs += [c[k] for c in sig.get("constraints") or [] for k in WHEN_KEYS if k in c]
+        for expr in exprs:
+            for ident in sorted(expression_identifiers(expr)):
+                if ident in signals and ident not in on_bus:
+                    rep.error(
+                        f"signals/{name}: condition references '{ident}', which has no "
+                        f"Modbus binding -- a bus client cannot read it, so it cannot "
+                        f"evaluate this condition"
+                    )
+
+    # Procedures run over the bus.
+    for pname, proc in (doc.get("procedures") or {}).items():
+        steps = list(proc.get("steps") or []) + list(proc.get("on_failure") or [])
+        for i, step in enumerate(steps):
+            targets = []
+            for verb in ("write", "read"):
+                if isinstance(step.get(verb), dict) and "signal" in step[verb]:
+                    targets.append(step[verb]["signal"])
+            if isinstance(step.get("await"), dict) and "signal" in step["await"]:
+                targets.append(step["await"]["signal"])
+            targets += list(step.get("reread") or [])
+            if isinstance(step.get("verify"), dict) and "read" in step["verify"]:
+                targets.append(step["verify"]["read"])
+            for ref in targets:
+                if ref in signals and ref not in on_bus:
+                    rep.error(
+                        f"procedures/{pname}/steps/{i}: targets '{ref}', which has no "
+                        f"Modbus binding and so cannot be reached by a procedure"
+                    )
+
+    for name, sig in signals.items():
+        if sig.get("kind") == "setting" and "default" not in sig:
+            rep.warn(
+                f"signals/{name}: a setting with no default cannot be factory-reset "
+                f"or offered a starting value"
+            )
+
+
 def check_reread_dependents(doc, index, rep: Report) -> None:
     for name, sig in (doc.get("signals") or {}).items():
         on_write = sig.get("on_write") or {}
@@ -242,6 +293,7 @@ def main(argv: list[str]) -> int:
 
     check_schema(doc, rep)
     check_references(doc, rep)
+    check_internal_properties(doc, rep)
     index = reverse_index(doc)
     check_reread_dependents(doc, index, rep)
 

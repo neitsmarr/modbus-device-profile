@@ -73,7 +73,13 @@ def main() -> int:
     reject("invented access level", lambda d: sig(d, "ventilation_level").update({"access": "commissioning"}))
 
     print("-- bindings")
-    reject("signal with no binding", lambda d: sig(d, "ventilation_level").pop("binding"))
+    reject("property with no kind", lambda d: sig(d, "ventilation_level").pop("kind"))
+    reject("command that is not write_only",
+           lambda d: sig(d, "device_reset").update({"access": "read_write"}))
+    reject("measurement with a factory default",
+           lambda d: sig(d, "supply_fan_speed").update({"default": 0}))
+    reject("measurement that is writable",
+           lambda d: sig(d, "supply_fan_speed").update({"access": "read_write"}))
     reject("two tables in one binding", lambda d: sig(d, "supply_fan_speed")["binding"].update({"holding": 5}))
     reject("address above 65535", lambda d: sig(d, "supply_fan_speed")["binding"].update({"input": 70000}))
     reject("bit without type bool", lambda d: sig(d, "supply_fan_speed")["binding"].update({"bit": 3}))
@@ -116,6 +122,8 @@ def main() -> int:
     accept("bit flag as bool",
            lambda d: sig(d, "supply_digital_input_state")["binding"].update({"bit": 3, "type": "bool"}))
     accept("hidden service register", lambda d: sig(d, "internal_voltage_3v3").update({"hidden": True}))
+    accept("internal property with no binding (D8)",
+           lambda d: sig(d, "ventilation_level").pop("binding"))
     accept("contains in a precondition-bearing outcome",
            lambda d: proc(d, "swap_air_chains")["outcome"].update(
                {"failure": {"signal": "device_status_errors", "contains": "memory_fault"}}))

@@ -40,12 +40,14 @@ signals:
 
   server_slave_address:
     title: "Device Slave Address"
+    kind: setting
     binding: { holding: 1, type: uint16 }
     range: [1, 247]
     default: 1
 
   server_baud_rate:
     title: "Modbus Baud Rate"
+    kind: setting
     binding: { holding: 2, type: uint16 }
     unit: "bps"
     enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
@@ -53,17 +55,20 @@ signals:
 
   server_parity:
     title: "Modbus Parity"
+    kind: setting
     binding: { holding: 3, type: uint16 }
     enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
     default: even_8e1
 
   device_type:
     title: "Device Type"
+    kind: measurement
     binding: { holding: 4, type: uint16 }
     access: read_only
 
   hardware_version:
     title: "Hardware Version"
+    kind: measurement
     binding: { holding: 5, type: uint16 }
     access: read_only
     # packed BCD-style bytes in the library format; see the open formatting
@@ -71,17 +76,20 @@ signals:
 
   firmware_version:
     title: "Firmware Version"
+    kind: measurement
     binding: { holding: 6, type: uint16 }
     access: read_only
 
   server_termination_resistor:
     title: "Network Bus Termination Resistor"
+    kind: setting
     binding: { holding: 9, type: uint16 }
     enum: { 0: disconnected, 1: connected }
     default: disconnected
 
   modbus_registers_reset:
     title: "Modbus Registers Reset"
+    kind: command
     binding: { holding: 10, type: uint16 }
     access: write_only
     enum: { 0: idle, 1: reset }
@@ -93,6 +101,7 @@ signals:
 
   client_enable:
     title: "Client Interface Enable"
+    kind: setting
     binding: { holding: 11, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: disabled
@@ -102,6 +111,7 @@ signals:
 
   client_baud_rate:
     title: "Client Baud Rate"
+    kind: setting
     binding: { holding: 12, type: uint16 }
     unit: "bps"
     enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
@@ -110,6 +120,7 @@ signals:
 
   client_parity:
     title: "Client Parity"
+    kind: setting
     binding: { holding: 13, type: uint16 }
     enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
     default: even_8e1
@@ -117,6 +128,7 @@ signals:
 
   client_poll_interval:
     title: "Client Poll Interval"
+    kind: setting
     binding: { holding: 14, type: uint16 }
     unit: "ms"
     range: [100, 10000]
@@ -126,6 +138,7 @@ signals:
 
   client_response_timeout:
     title: "Client Response Timeout"
+    kind: setting
     binding: { holding: 15, type: uint16 }
     unit: "ms"
     range: [50, 5000]
@@ -134,6 +147,7 @@ signals:
 
   client_retry_count:
     title: "Client Retry Count"
+    kind: setting
     binding: { holding: 16, type: uint16 }
     range: [0, 5]
     default: 2
@@ -141,6 +155,7 @@ signals:
 
   client_state:
     title: "Client Interface State"
+    kind: measurement
     binding: { input: 11, type: uint16 }
     access: read_only
     enum: { 0: idle, 1: polling, 2: degraded, 3: bus_fault }
@@ -152,6 +167,7 @@ signals:
 
   left_right_swap:
     title: "Left-Right Swap"
+    kind: setting
     binding: { holding: 21, type: uint16 }
     enum: { 0: normal, 1: swapped }
     default: normal
@@ -164,6 +180,7 @@ signals:
 
   operating_mode:
     title: "Operating Mode"
+    kind: setting
     binding: { holding: 22, type: uint16 }
     enum: { 0: standby, 1: manual, 2: automatic, 3: boost, 4: away }
     default: automatic
@@ -173,6 +190,7 @@ signals:
 
   ventilation_level:
     title: "Ventilation Level"
+    kind: setting
     binding: { holding: 23, type: uint16 }
     unit: "%"
     range: [0, 100]
@@ -182,6 +200,7 @@ signals:
 
   co2_setpoint:
     title: "Carbon Dioxide Setpoint"
+    kind: setting
     binding: { holding: 24, type: uint16 }
     unit: "ppm"
     range: [600, 1500]
@@ -191,6 +210,7 @@ signals:
 
   humidity_setpoint:
     title: "Relative Humidity Setpoint"
+    kind: setting
     binding: { holding: 25, type: uint16 }
     unit: "%RH"
     range: [30, 70]
@@ -199,6 +219,7 @@ signals:
 
   modbus_safety_timeout:
     title: "Modbus Safety Timeout"
+    kind: setting
     binding: { holding: 26, type: uint16 }
     unit: "minutes"
     range: [0, 240]
@@ -208,6 +229,7 @@ signals:
 
   sensor_bus_rescan:
     title: "Sensor Bus Rescan"
+    kind: command
     binding: { holding: 27, type: uint16 }
     access: write_only
     enum: { 0: idle, 1: rescan }
@@ -215,12 +237,14 @@ signals:
 
   sensor_bus_state:
     title: "Sensor Bus State"
+    kind: measurement
     binding: { input: 13, type: uint16 }
     access: read_only
     enum: { 0: idle, 1: scanning, 2: complete, 3: failed }
 
   device_status_errors:
     title: "Device Status - Errors"
+    kind: measurement
     binding: { input: 1, type: uint16 }
     access: read_only
     flags:
@@ -235,6 +259,7 @@ signals:
 
   device_status_warnings:
     title: "Device Status - Warnings"
+    kind: measurement
     binding: { input: 2, type: uint16 }
     access: read_only
     flags:
@@ -247,6 +272,7 @@ signals:
 
   supply_voltage:
     title: "Supply Voltage"
+    kind: measurement
     binding: { input: 3, type: uint16 }
     access: read_only
     unit: "VDC"
@@ -255,6 +281,7 @@ signals:
 
   application_state:
     title: "Application State"
+    kind: measurement
     binding: { input: 12, type: uint16 }
     access: read_only
     enum: { 0: idle, 1: ventilating, 2: boosting, 3: away, 4: fault }
@@ -270,6 +297,7 @@ signals:
   # ---------------------------------------------------------------------
   outdoor_air_temperature_source:
     title: "Outdoor Air Temperature Source"
+    kind: setting
     binding: { holding: 31, type: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
@@ -281,6 +309,7 @@ signals:
       settle_ms: 500
   supply_air_temperature_source:
     title: "Supply Air Temperature Source"
+    kind: setting
     binding: { holding: 32, type: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
@@ -292,6 +321,7 @@ signals:
       settle_ms: 500
   extract_air_temperature_source:
     title: "Extract Air Temperature Source"
+    kind: setting
     binding: { holding: 33, type: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
@@ -303,6 +333,7 @@ signals:
       settle_ms: 500
   exhaust_air_temperature_source:
     title: "Exhaust Air Temperature Source"
+    kind: setting
     binding: { holding: 34, type: uint16 }
     enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
     default: none
@@ -314,6 +345,7 @@ signals:
       settle_ms: 500
   outdoor_air_temperature:
     title: "Outdoor Air Temperature"
+    kind: measurement
     binding: { input: 21, type: int16 }
     access: read_only
     unit: "°C"
@@ -323,6 +355,7 @@ signals:
     valid_when: outdoor_air_temperature_source != none
   supply_air_temperature:
     title: "Supply Air Temperature"
+    kind: measurement
     binding: { input: 22, type: int16 }
     access: read_only
     unit: "°C"
@@ -332,6 +365,7 @@ signals:
     valid_when: supply_air_temperature_source != none
   extract_air_temperature:
     title: "Extract Air Temperature"
+    kind: measurement
     binding: { input: 23, type: int16 }
     access: read_only
     unit: "°C"
@@ -341,6 +375,7 @@ signals:
     valid_when: extract_air_temperature_source != none
   exhaust_air_temperature:
     title: "Exhaust Air Temperature"
+    kind: measurement
     binding: { input: 24, type: int16 }
     access: read_only
     unit: "°C"
@@ -350,6 +385,7 @@ signals:
     valid_when: exhaust_air_temperature_source != none
   heat_recovery_efficiency:
     title: "Heat Recovery Efficiency"
+    kind: measurement
     binding: { input: 25, type: uint16 }
     access: read_only
     unit: "%"
@@ -368,6 +404,7 @@ signals:
 
   preheater_installed:
     title: "Pre-heater Installed"
+    kind: setting
     binding: { holding: 41, type: uint16 }
     enum: { 0: not_installed, 1: installed }
     default: not_installed
@@ -379,6 +416,7 @@ signals:
 
   preheater_control_mode:
     title: "Pre-heater Control Mode"
+    kind: setting
     binding: { holding: 42, type: uint16 }
     enum: { 0: disabled, 1: frost_protection, 2: supply_temperature }
     default: frost_protection
@@ -388,6 +426,7 @@ signals:
 
   preheater_output_type:
     title: "Pre-heater Output Type"
+    kind: setting
     binding: { holding: 43, type: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
@@ -395,6 +434,7 @@ signals:
 
   preheater_minimum_output_value:
     title: "Pre-heater Minimum Output Value"
+    kind: setting
     binding: { holding: 44, type: uint16 }
     unit: "%"
     range: [0, 50]
@@ -403,6 +443,7 @@ signals:
 
   preheater_maximum_output_value:
     title: "Pre-heater Maximum Output Value"
+    kind: setting
     binding: { holding: 45, type: uint16 }
     unit: "%"
     range: [50, 100]
@@ -411,6 +452,7 @@ signals:
 
   preheater_frost_protection_setpoint:
     title: "Pre-heater Frost Protection Setpoint"
+    kind: setting
     binding: { holding: 46, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -421,6 +463,7 @@ signals:
 
   preheater_supply_temperature_setpoint:
     title: "Pre-heater Supply Temperature Setpoint"
+    kind: setting
     binding: { holding: 47, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -431,6 +474,7 @@ signals:
 
   preheater_output_value:
     title: "Pre-heater Output Value"
+    kind: measurement
     binding: { input: 31, type: uint16 }
     access: read_only
     unit: "%"
@@ -439,6 +483,7 @@ signals:
 
   preheater_state:
     title: "Pre-heater State"
+    kind: measurement
     binding: { input: 32, type: uint16 }
     access: read_only
     flags:
@@ -454,6 +499,7 @@ signals:
 
   bypass_control_mode:
     title: "Bypass Control Mode"
+    kind: setting
     binding: { holding: 51, type: uint16 }
     enum: { 0: disabled, 1: automatic, 2: manual }
     default: automatic
@@ -463,6 +509,7 @@ signals:
 
   bypass_output_type:
     title: "Bypass Output Type"
+    kind: setting
     binding: { holding: 52, type: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
@@ -470,6 +517,7 @@ signals:
 
   bypass_minimum_output_value:
     title: "Bypass Minimum Output Value"
+    kind: setting
     binding: { holding: 53, type: uint16 }
     unit: "%"
     range: [0, 40]
@@ -479,6 +527,7 @@ signals:
 
   bypass_maximum_output_value:
     title: "Bypass Maximum Output Value"
+    kind: setting
     binding: { holding: 54, type: uint16 }
     unit: "%"
     range: [60, 100]
@@ -487,6 +536,7 @@ signals:
 
   bypass_outdoor_temperature_threshold:
     title: "Bypass Outdoor Temperature Threshold"
+    kind: setting
     binding: { holding: 55, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -497,6 +547,7 @@ signals:
 
   bypass_extract_temperature_threshold:
     title: "Bypass Extract Temperature Threshold"
+    kind: setting
     binding: { holding: 56, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -507,6 +558,7 @@ signals:
 
   bypass_manual_position:
     title: "Bypass Manual Position"
+    kind: setting
     binding: { holding: 57, type: uint16 }
     unit: "%"
     range: [0, 100]
@@ -516,6 +568,7 @@ signals:
 
   bypass_position:
     title: "Bypass Position"
+    kind: measurement
     binding: { input: 41, type: uint16 }
     access: read_only
     unit: "%"
@@ -524,6 +577,7 @@ signals:
 
   bypass_state:
     title: "Bypass State"
+    kind: measurement
     binding: { input: 42, type: uint16 }
     access: read_only
     flags:
@@ -546,6 +600,7 @@ signals:
 
   filter_monitoring_mode:
     title: "Filter Monitoring Mode"
+    kind: setting
     binding: { holding: 61, type: uint16 }
     enum: { 0: disabled, 1: elapsed_time, 2: differential_pressure }
     default: elapsed_time
@@ -555,6 +610,7 @@ signals:
 
   filter_replacement_interval:
     title: "Filter Replacement Interval"
+    kind: setting
     binding: { holding: 62, type: uint16 }
     unit: "days"
     range: [30, 365]
@@ -563,6 +619,7 @@ signals:
 
   filter_differential_pressure_threshold:
     title: "Filter Differential Pressure Threshold"
+    kind: setting
     binding: { holding: 63, type: uint16 }
     unit: "Pa"
     range: [50, 500]
@@ -571,6 +628,7 @@ signals:
 
   filter_elapsed_time:
     title: "Filter Elapsed Time"
+    kind: measurement
     binding: { input: 51, type: uint16 }
     access: read_only
     unit: "days"
@@ -579,6 +637,7 @@ signals:
 
   filter_differential_pressure:
     title: "Filter Differential Pressure"
+    kind: measurement
     binding: { input: 52, type: uint16 }
     access: read_only
     unit: "Pa"
@@ -587,6 +646,7 @@ signals:
 
   filter_state:
     title: "Filter State"
+    kind: measurement
     binding: { input: 53, type: uint16 }
     access: read_only
     flags:
@@ -597,6 +657,7 @@ signals:
 
   filter_counter_reset:
     title: "Filter Counter Reset"
+    kind: command
     binding: { holding: 64, type: uint16 }
     access: write_only
     enum: { 0: idle, 1: reset }
@@ -609,6 +670,7 @@ signals:
 
   supply_fan_control_source:
     title: "Supply Fan Control Source"
+    kind: setting
     binding: { holding: 101, type: uint16 }
     enum: { 0: analog_output, 1: modbus }
     default: analog_output
@@ -618,6 +680,7 @@ signals:
 
   supply_fan_analog_output_type:
     title: "Supply Fan Analog Output Type"
+    kind: setting
     binding: { holding: 102, type: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
@@ -625,6 +688,7 @@ signals:
 
   supply_fan_minimum_output_value:
     title: "Supply Fan Minimum Output Value"
+    kind: setting
     binding: { holding: 103, type: uint16 }
     unit: "%"
     range: [20, 60]
@@ -632,6 +696,7 @@ signals:
 
   supply_fan_maximum_output_value:
     title: "Supply Fan Maximum Output Value"
+    kind: setting
     binding: { holding: 104, type: uint16 }
     unit: "%"
     range: [60, 100]
@@ -639,6 +704,7 @@ signals:
 
   supply_fan_start_output_value:
     title: "Supply Fan Start Output Value"
+    kind: setting
     binding: { holding: 105, type: uint16 }
     unit: "%"
     range: [20, 100]
@@ -646,12 +712,14 @@ signals:
 
   supply_fan_kickstart_control:
     title: "Supply Fan Kickstart Control"
+    kind: setting
     binding: { holding: 106, type: uint16 }
     enum: { 0: softstart, 1: kickstart }
     default: softstart
 
   supply_fan_kickstart_time:
     title: "Supply Fan Kickstart Time"
+    kind: setting
     binding: { holding: 107, type: uint16 }
     unit: "seconds"
     range: [2, 10]
@@ -660,6 +728,7 @@ signals:
 
   supply_fan_modbus_slave_address:
     title: "Supply Fan Modbus Slave Address"
+    kind: setting
     binding: { holding: 108, type: uint16 }
     range: [1, 247]
     default: 1
@@ -667,12 +736,14 @@ signals:
 
   supply_fan_modbus_speed_register:
     title: "Supply Fan Modbus Speed Register"
+    kind: setting
     binding: { holding: 109, type: uint16 }
     range: [1, 65535]
     present_when: supply_fan_control_source == modbus
 
   supply_fan_overwrite_enable:
     title: "Supply Fan Overwrite Enable"
+    kind: setting
     binding: { holding: 110, type: uint16 }
     enum: { 0: automatic, 1: overwrite }
     default: automatic
@@ -681,6 +752,7 @@ signals:
 
   supply_fan_overwrite_value:
     title: "Supply Fan Overwrite Value"
+    kind: setting
     binding: { holding: 111, type: uint16 }
     unit: "%"
     range: [0, 100]
@@ -689,6 +761,7 @@ signals:
 
   supply_digital_input_function:
     title: "Supply Digital Input Function"
+    kind: setting
     binding: { holding: 116, type: uint16 }
     enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
     default: disabled
@@ -697,6 +770,7 @@ signals:
 
   supply_digital_input_polarity:
     title: "Supply Digital Input Polarity"
+    kind: setting
     binding: { holding: 117, type: uint16 }
     enum: { 0: normally_open, 1: normally_closed }
     default: normally_open
@@ -704,6 +778,7 @@ signals:
 
   supply_fan_output_value:
     title: "Supply Fan Output Value"
+    kind: measurement
     binding: { input: 101, type: uint16 }
     access: read_only
     unit: "%"
@@ -711,6 +786,7 @@ signals:
 
   supply_fan_speed:
     title: "Supply Fan Speed"
+    kind: measurement
     binding: { input: 102, type: uint16 }
     access: read_only
     unit: "rpm"
@@ -718,6 +794,7 @@ signals:
 
   supply_fan_state:
     title: "Supply Fan State"
+    kind: measurement
     binding: { input: 103, type: uint16 }
     access: read_only
     flags:
@@ -728,6 +805,7 @@ signals:
 
   supply_digital_input_state:
     title: "Supply Digital Input State"
+    kind: measurement
     binding: { input: 104, type: uint16 }
     access: read_only
     enum: { 0: low, 1: high }
@@ -739,6 +817,7 @@ signals:
 
   extract_fan_control_source:
     title: "Extract Fan Control Source"
+    kind: setting
     binding: { holding: 131, type: uint16 }
     enum: { 0: analog_output, 1: modbus }
     default: analog_output
@@ -748,6 +827,7 @@ signals:
 
   extract_fan_analog_output_type:
     title: "Extract Fan Analog Output Type"
+    kind: setting
     binding: { holding: 132, type: uint16 }
     enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
     default: v0_10
@@ -755,6 +835,7 @@ signals:
 
   extract_fan_minimum_output_value:
     title: "Extract Fan Minimum Output Value"
+    kind: setting
     binding: { holding: 133, type: uint16 }
     unit: "%"
     range: [20, 60]
@@ -762,6 +843,7 @@ signals:
 
   extract_fan_maximum_output_value:
     title: "Extract Fan Maximum Output Value"
+    kind: setting
     binding: { holding: 134, type: uint16 }
     unit: "%"
     range: [60, 100]
@@ -769,6 +851,7 @@ signals:
 
   extract_fan_start_output_value:
     title: "Extract Fan Start Output Value"
+    kind: setting
     binding: { holding: 135, type: uint16 }
     unit: "%"
     range: [20, 100]
@@ -776,12 +859,14 @@ signals:
 
   extract_fan_kickstart_control:
     title: "Extract Fan Kickstart Control"
+    kind: setting
     binding: { holding: 136, type: uint16 }
     enum: { 0: softstart, 1: kickstart }
     default: softstart
 
   extract_fan_kickstart_time:
     title: "Extract Fan Kickstart Time"
+    kind: setting
     binding: { holding: 137, type: uint16 }
     unit: "seconds"
     range: [2, 10]
@@ -790,6 +875,7 @@ signals:
 
   extract_fan_modbus_slave_address:
     title: "Extract Fan Modbus Slave Address"
+    kind: setting
     binding: { holding: 138, type: uint16 }
     range: [1, 247]
     default: 1
@@ -797,12 +883,14 @@ signals:
 
   extract_fan_modbus_speed_register:
     title: "Extract Fan Modbus Speed Register"
+    kind: setting
     binding: { holding: 139, type: uint16 }
     range: [1, 65535]
     present_when: extract_fan_control_source == modbus
 
   extract_fan_overwrite_enable:
     title: "Extract Fan Overwrite Enable"
+    kind: setting
     binding: { holding: 140, type: uint16 }
     enum: { 0: automatic, 1: overwrite }
     default: automatic
@@ -811,6 +899,7 @@ signals:
 
   extract_fan_overwrite_value:
     title: "Extract Fan Overwrite Value"
+    kind: setting
     binding: { holding: 141, type: uint16 }
     unit: "%"
     range: [0, 100]
@@ -819,6 +908,7 @@ signals:
 
   extract_digital_input_function:
     title: "Extract Digital Input Function"
+    kind: setting
     binding: { holding: 146, type: uint16 }
     enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
     default: disabled
@@ -827,6 +917,7 @@ signals:
 
   extract_digital_input_polarity:
     title: "Extract Digital Input Polarity"
+    kind: setting
     binding: { holding: 147, type: uint16 }
     enum: { 0: normally_open, 1: normally_closed }
     default: normally_open
@@ -834,6 +925,7 @@ signals:
 
   extract_fan_output_value:
     title: "Extract Fan Output Value"
+    kind: measurement
     binding: { input: 131, type: uint16 }
     access: read_only
     unit: "%"
@@ -841,6 +933,7 @@ signals:
 
   extract_fan_speed:
     title: "Extract Fan Speed"
+    kind: measurement
     binding: { input: 132, type: uint16 }
     access: read_only
     unit: "rpm"
@@ -848,6 +941,7 @@ signals:
 
   extract_fan_state:
     title: "Extract Fan State"
+    kind: measurement
     binding: { input: 133, type: uint16 }
     access: read_only
     flags:
@@ -858,6 +952,7 @@ signals:
 
   extract_digital_input_state:
     title: "Extract Digital Input State"
+    kind: measurement
     binding: { input: 134, type: uint16 }
     access: read_only
     enum: { 0: low, 1: high }
@@ -869,6 +964,7 @@ signals:
 
   supply_ch1_sensor_capability:
     title: "Supply Channel 1 - Sensor Capability"
+    kind: measurement
     binding: { input: 201, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -882,6 +978,7 @@ signals:
 
   supply_ch1_sensor_state:
     title: "Supply Channel 1 - Sensor State"
+    kind: measurement
     binding: { input: 202, type: uint16 }
     access: read_only
     flags:
@@ -892,6 +989,7 @@ signals:
 
   supply_ch1_alerts:
     title: "Supply Channel 1 - Alerts"
+    kind: measurement
     binding: { input: 203, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -899,6 +997,7 @@ signals:
 
   supply_ch1_temperature_level:
     title: "Supply Channel 1 - Temperature Level"
+    kind: measurement
     binding: { input: 204, type: int16 }
     access: read_only
     unit: "°C"
@@ -910,6 +1009,7 @@ signals:
 
   supply_ch1_relative_humidity_level:
     title: "Supply Channel 1 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 205, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -921,6 +1021,7 @@ signals:
 
   supply_ch1_voc_level:
     title: "Supply Channel 1 - VOC Level"
+    kind: measurement
     binding: { input: 206, type: uint16 }
     access: read_only
     unit: "index"
@@ -931,6 +1032,7 @@ signals:
 
   supply_ch1_carbon_dioxide_level:
     title: "Supply Channel 1 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 207, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -941,6 +1043,7 @@ signals:
 
   supply_ch1_barometric_pressure_level:
     title: "Supply Channel 1 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 208, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -952,6 +1055,7 @@ signals:
 
   supply_ch1_enable:
     title: "Supply Channel 1 - Channel Enable"
+    kind: setting
     binding: { holding: 201, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -961,6 +1065,7 @@ signals:
 
   supply_ch1_temperature_correction:
     title: "Supply Channel 1 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 202, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -971,6 +1076,7 @@ signals:
 
   supply_ch1_relative_humidity_correction:
     title: "Supply Channel 1 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 203, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -981,6 +1087,7 @@ signals:
 
   supply_ch1_voc_correction:
     title: "Supply Channel 1 - VOC Correction Value"
+    kind: setting
     binding: { holding: 204, type: int16 }
     unit: "index"
     decimals: 0
@@ -990,6 +1097,7 @@ signals:
 
   supply_ch1_carbon_dioxide_correction:
     title: "Supply Channel 1 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 205, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -999,6 +1107,7 @@ signals:
 
   supply_ch1_barometric_pressure_correction:
     title: "Supply Channel 1 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 206, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1009,6 +1118,7 @@ signals:
 
   supply_ch1_carbon_dioxide_alert_1_level:
     title: "Supply Channel 1 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 211, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1017,6 +1127,7 @@ signals:
 
   supply_ch1_carbon_dioxide_alert_2_level:
     title: "Supply Channel 1 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 212, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1025,6 +1136,7 @@ signals:
 
   supply_ch1_voc_alert_1_level:
     title: "Supply Channel 1 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 213, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1033,6 +1145,7 @@ signals:
 
   supply_ch1_voc_alert_2_level:
     title: "Supply Channel 1 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 214, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1045,6 +1158,7 @@ signals:
 
   supply_ch2_sensor_capability:
     title: "Supply Channel 2 - Sensor Capability"
+    kind: measurement
     binding: { input: 221, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -1058,6 +1172,7 @@ signals:
 
   supply_ch2_sensor_state:
     title: "Supply Channel 2 - Sensor State"
+    kind: measurement
     binding: { input: 222, type: uint16 }
     access: read_only
     flags:
@@ -1068,6 +1183,7 @@ signals:
 
   supply_ch2_alerts:
     title: "Supply Channel 2 - Alerts"
+    kind: measurement
     binding: { input: 223, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -1075,6 +1191,7 @@ signals:
 
   supply_ch2_temperature_level:
     title: "Supply Channel 2 - Temperature Level"
+    kind: measurement
     binding: { input: 224, type: int16 }
     access: read_only
     unit: "°C"
@@ -1086,6 +1203,7 @@ signals:
 
   supply_ch2_relative_humidity_level:
     title: "Supply Channel 2 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 225, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -1097,6 +1215,7 @@ signals:
 
   supply_ch2_voc_level:
     title: "Supply Channel 2 - VOC Level"
+    kind: measurement
     binding: { input: 226, type: uint16 }
     access: read_only
     unit: "index"
@@ -1107,6 +1226,7 @@ signals:
 
   supply_ch2_carbon_dioxide_level:
     title: "Supply Channel 2 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 227, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -1117,6 +1237,7 @@ signals:
 
   supply_ch2_barometric_pressure_level:
     title: "Supply Channel 2 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 228, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -1128,6 +1249,7 @@ signals:
 
   supply_ch2_enable:
     title: "Supply Channel 2 - Channel Enable"
+    kind: setting
     binding: { holding: 221, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -1137,6 +1259,7 @@ signals:
 
   supply_ch2_temperature_correction:
     title: "Supply Channel 2 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 222, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -1147,6 +1270,7 @@ signals:
 
   supply_ch2_relative_humidity_correction:
     title: "Supply Channel 2 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 223, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -1157,6 +1281,7 @@ signals:
 
   supply_ch2_voc_correction:
     title: "Supply Channel 2 - VOC Correction Value"
+    kind: setting
     binding: { holding: 224, type: int16 }
     unit: "index"
     decimals: 0
@@ -1166,6 +1291,7 @@ signals:
 
   supply_ch2_carbon_dioxide_correction:
     title: "Supply Channel 2 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 225, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -1175,6 +1301,7 @@ signals:
 
   supply_ch2_barometric_pressure_correction:
     title: "Supply Channel 2 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 226, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1185,6 +1312,7 @@ signals:
 
   supply_ch2_carbon_dioxide_alert_1_level:
     title: "Supply Channel 2 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 231, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1193,6 +1321,7 @@ signals:
 
   supply_ch2_carbon_dioxide_alert_2_level:
     title: "Supply Channel 2 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 232, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1201,6 +1330,7 @@ signals:
 
   supply_ch2_voc_alert_1_level:
     title: "Supply Channel 2 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 233, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1209,6 +1339,7 @@ signals:
 
   supply_ch2_voc_alert_2_level:
     title: "Supply Channel 2 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 234, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1221,6 +1352,7 @@ signals:
 
   supply_ch3_sensor_capability:
     title: "Supply Channel 3 - Sensor Capability"
+    kind: measurement
     binding: { input: 241, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -1234,6 +1366,7 @@ signals:
 
   supply_ch3_sensor_state:
     title: "Supply Channel 3 - Sensor State"
+    kind: measurement
     binding: { input: 242, type: uint16 }
     access: read_only
     flags:
@@ -1244,6 +1377,7 @@ signals:
 
   supply_ch3_alerts:
     title: "Supply Channel 3 - Alerts"
+    kind: measurement
     binding: { input: 243, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -1251,6 +1385,7 @@ signals:
 
   supply_ch3_temperature_level:
     title: "Supply Channel 3 - Temperature Level"
+    kind: measurement
     binding: { input: 244, type: int16 }
     access: read_only
     unit: "°C"
@@ -1262,6 +1397,7 @@ signals:
 
   supply_ch3_relative_humidity_level:
     title: "Supply Channel 3 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 245, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -1273,6 +1409,7 @@ signals:
 
   supply_ch3_voc_level:
     title: "Supply Channel 3 - VOC Level"
+    kind: measurement
     binding: { input: 246, type: uint16 }
     access: read_only
     unit: "index"
@@ -1283,6 +1420,7 @@ signals:
 
   supply_ch3_carbon_dioxide_level:
     title: "Supply Channel 3 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 247, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -1293,6 +1431,7 @@ signals:
 
   supply_ch3_barometric_pressure_level:
     title: "Supply Channel 3 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 248, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -1304,6 +1443,7 @@ signals:
 
   supply_ch3_enable:
     title: "Supply Channel 3 - Channel Enable"
+    kind: setting
     binding: { holding: 241, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -1313,6 +1453,7 @@ signals:
 
   supply_ch3_temperature_correction:
     title: "Supply Channel 3 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 242, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -1323,6 +1464,7 @@ signals:
 
   supply_ch3_relative_humidity_correction:
     title: "Supply Channel 3 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 243, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -1333,6 +1475,7 @@ signals:
 
   supply_ch3_voc_correction:
     title: "Supply Channel 3 - VOC Correction Value"
+    kind: setting
     binding: { holding: 244, type: int16 }
     unit: "index"
     decimals: 0
@@ -1342,6 +1485,7 @@ signals:
 
   supply_ch3_carbon_dioxide_correction:
     title: "Supply Channel 3 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 245, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -1351,6 +1495,7 @@ signals:
 
   supply_ch3_barometric_pressure_correction:
     title: "Supply Channel 3 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 246, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1361,6 +1506,7 @@ signals:
 
   supply_ch3_carbon_dioxide_alert_1_level:
     title: "Supply Channel 3 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 251, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1369,6 +1515,7 @@ signals:
 
   supply_ch3_carbon_dioxide_alert_2_level:
     title: "Supply Channel 3 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 252, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1377,6 +1524,7 @@ signals:
 
   supply_ch3_voc_alert_1_level:
     title: "Supply Channel 3 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 253, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1385,6 +1533,7 @@ signals:
 
   supply_ch3_voc_alert_2_level:
     title: "Supply Channel 3 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 254, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1397,6 +1546,7 @@ signals:
 
   extract_ch1_sensor_capability:
     title: "Extract Channel 1 - Sensor Capability"
+    kind: measurement
     binding: { input: 261, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -1410,6 +1560,7 @@ signals:
 
   extract_ch1_sensor_state:
     title: "Extract Channel 1 - Sensor State"
+    kind: measurement
     binding: { input: 262, type: uint16 }
     access: read_only
     flags:
@@ -1420,6 +1571,7 @@ signals:
 
   extract_ch1_alerts:
     title: "Extract Channel 1 - Alerts"
+    kind: measurement
     binding: { input: 263, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -1427,6 +1579,7 @@ signals:
 
   extract_ch1_temperature_level:
     title: "Extract Channel 1 - Temperature Level"
+    kind: measurement
     binding: { input: 264, type: int16 }
     access: read_only
     unit: "°C"
@@ -1438,6 +1591,7 @@ signals:
 
   extract_ch1_relative_humidity_level:
     title: "Extract Channel 1 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 265, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -1449,6 +1603,7 @@ signals:
 
   extract_ch1_voc_level:
     title: "Extract Channel 1 - VOC Level"
+    kind: measurement
     binding: { input: 266, type: uint16 }
     access: read_only
     unit: "index"
@@ -1459,6 +1614,7 @@ signals:
 
   extract_ch1_carbon_dioxide_level:
     title: "Extract Channel 1 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 267, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -1469,6 +1625,7 @@ signals:
 
   extract_ch1_barometric_pressure_level:
     title: "Extract Channel 1 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 268, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -1480,6 +1637,7 @@ signals:
 
   extract_ch1_enable:
     title: "Extract Channel 1 - Channel Enable"
+    kind: setting
     binding: { holding: 261, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -1489,6 +1647,7 @@ signals:
 
   extract_ch1_temperature_correction:
     title: "Extract Channel 1 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 262, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -1499,6 +1658,7 @@ signals:
 
   extract_ch1_relative_humidity_correction:
     title: "Extract Channel 1 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 263, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -1509,6 +1669,7 @@ signals:
 
   extract_ch1_voc_correction:
     title: "Extract Channel 1 - VOC Correction Value"
+    kind: setting
     binding: { holding: 264, type: int16 }
     unit: "index"
     decimals: 0
@@ -1518,6 +1679,7 @@ signals:
 
   extract_ch1_carbon_dioxide_correction:
     title: "Extract Channel 1 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 265, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -1527,6 +1689,7 @@ signals:
 
   extract_ch1_barometric_pressure_correction:
     title: "Extract Channel 1 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 266, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1537,6 +1700,7 @@ signals:
 
   extract_ch1_carbon_dioxide_alert_1_level:
     title: "Extract Channel 1 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 271, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1545,6 +1709,7 @@ signals:
 
   extract_ch1_carbon_dioxide_alert_2_level:
     title: "Extract Channel 1 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 272, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1553,6 +1718,7 @@ signals:
 
   extract_ch1_voc_alert_1_level:
     title: "Extract Channel 1 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 273, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1561,6 +1727,7 @@ signals:
 
   extract_ch1_voc_alert_2_level:
     title: "Extract Channel 1 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 274, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1573,6 +1740,7 @@ signals:
 
   extract_ch2_sensor_capability:
     title: "Extract Channel 2 - Sensor Capability"
+    kind: measurement
     binding: { input: 281, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -1586,6 +1754,7 @@ signals:
 
   extract_ch2_sensor_state:
     title: "Extract Channel 2 - Sensor State"
+    kind: measurement
     binding: { input: 282, type: uint16 }
     access: read_only
     flags:
@@ -1596,6 +1765,7 @@ signals:
 
   extract_ch2_alerts:
     title: "Extract Channel 2 - Alerts"
+    kind: measurement
     binding: { input: 283, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -1603,6 +1773,7 @@ signals:
 
   extract_ch2_temperature_level:
     title: "Extract Channel 2 - Temperature Level"
+    kind: measurement
     binding: { input: 284, type: int16 }
     access: read_only
     unit: "°C"
@@ -1614,6 +1785,7 @@ signals:
 
   extract_ch2_relative_humidity_level:
     title: "Extract Channel 2 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 285, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -1625,6 +1797,7 @@ signals:
 
   extract_ch2_voc_level:
     title: "Extract Channel 2 - VOC Level"
+    kind: measurement
     binding: { input: 286, type: uint16 }
     access: read_only
     unit: "index"
@@ -1635,6 +1808,7 @@ signals:
 
   extract_ch2_carbon_dioxide_level:
     title: "Extract Channel 2 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 287, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -1645,6 +1819,7 @@ signals:
 
   extract_ch2_barometric_pressure_level:
     title: "Extract Channel 2 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 288, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -1656,6 +1831,7 @@ signals:
 
   extract_ch2_enable:
     title: "Extract Channel 2 - Channel Enable"
+    kind: setting
     binding: { holding: 281, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -1665,6 +1841,7 @@ signals:
 
   extract_ch2_temperature_correction:
     title: "Extract Channel 2 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 282, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -1675,6 +1852,7 @@ signals:
 
   extract_ch2_relative_humidity_correction:
     title: "Extract Channel 2 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 283, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -1685,6 +1863,7 @@ signals:
 
   extract_ch2_voc_correction:
     title: "Extract Channel 2 - VOC Correction Value"
+    kind: setting
     binding: { holding: 284, type: int16 }
     unit: "index"
     decimals: 0
@@ -1694,6 +1873,7 @@ signals:
 
   extract_ch2_carbon_dioxide_correction:
     title: "Extract Channel 2 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 285, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -1703,6 +1883,7 @@ signals:
 
   extract_ch2_barometric_pressure_correction:
     title: "Extract Channel 2 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 286, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1713,6 +1894,7 @@ signals:
 
   extract_ch2_carbon_dioxide_alert_1_level:
     title: "Extract Channel 2 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 291, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1721,6 +1903,7 @@ signals:
 
   extract_ch2_carbon_dioxide_alert_2_level:
     title: "Extract Channel 2 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 292, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1729,6 +1912,7 @@ signals:
 
   extract_ch2_voc_alert_1_level:
     title: "Extract Channel 2 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 293, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1737,6 +1921,7 @@ signals:
 
   extract_ch2_voc_alert_2_level:
     title: "Extract Channel 2 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 294, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1749,6 +1934,7 @@ signals:
 
   extract_ch3_sensor_capability:
     title: "Extract Channel 3 - Sensor Capability"
+    kind: measurement
     binding: { input: 301, type: uint16 }
     access: read_only
     # A channel may carry several measurands at once, so this is a bit
@@ -1762,6 +1948,7 @@ signals:
 
   extract_ch3_sensor_state:
     title: "Extract Channel 3 - Sensor State"
+    kind: measurement
     binding: { input: 302, type: uint16 }
     access: read_only
     flags:
@@ -1772,6 +1959,7 @@ signals:
 
   extract_ch3_alerts:
     title: "Extract Channel 3 - Alerts"
+    kind: measurement
     binding: { input: 303, type: uint16 }
     access: read_only
     enum: { 0: ok, 1: yellow_alert, 2: red_alert }
@@ -1779,6 +1967,7 @@ signals:
 
   extract_ch3_temperature_level:
     title: "Extract Channel 3 - Temperature Level"
+    kind: measurement
     binding: { input: 304, type: int16 }
     access: read_only
     unit: "°C"
@@ -1790,6 +1979,7 @@ signals:
 
   extract_ch3_relative_humidity_level:
     title: "Extract Channel 3 - Relative Humidity Level"
+    kind: measurement
     binding: { input: 305, type: uint16 }
     access: read_only
     unit: "%RH"
@@ -1801,6 +1991,7 @@ signals:
 
   extract_ch3_voc_level:
     title: "Extract Channel 3 - VOC Level"
+    kind: measurement
     binding: { input: 306, type: uint16 }
     access: read_only
     unit: "index"
@@ -1811,6 +2002,7 @@ signals:
 
   extract_ch3_carbon_dioxide_level:
     title: "Extract Channel 3 - Carbon Dioxide Level"
+    kind: measurement
     binding: { input: 307, type: uint16 }
     access: read_only
     unit: "ppm"
@@ -1821,6 +2013,7 @@ signals:
 
   extract_ch3_barometric_pressure_level:
     title: "Extract Channel 3 - Barometric Pressure Level"
+    kind: measurement
     binding: { input: 308, type: uint16 }
     access: read_only
     unit: "hPa"
@@ -1832,6 +2025,7 @@ signals:
 
   extract_ch3_enable:
     title: "Extract Channel 3 - Channel Enable"
+    kind: setting
     binding: { holding: 301, type: uint16 }
     enum: { 0: disabled, 1: enabled }
     default: enabled
@@ -1841,6 +2035,7 @@ signals:
 
   extract_ch3_temperature_correction:
     title: "Extract Channel 3 - Temperature Correction Value"
+    kind: setting
     binding: { holding: 302, type: int16 }
     unit: "°C"
     scale: 0.1
@@ -1851,6 +2046,7 @@ signals:
 
   extract_ch3_relative_humidity_correction:
     title: "Extract Channel 3 - Relative Humidity Correction Value"
+    kind: setting
     binding: { holding: 303, type: int16 }
     unit: "%RH"
     scale: 0.1
@@ -1861,6 +2057,7 @@ signals:
 
   extract_ch3_voc_correction:
     title: "Extract Channel 3 - VOC Correction Value"
+    kind: setting
     binding: { holding: 304, type: int16 }
     unit: "index"
     decimals: 0
@@ -1870,6 +2067,7 @@ signals:
 
   extract_ch3_carbon_dioxide_correction:
     title: "Extract Channel 3 - Carbon Dioxide Correction Value"
+    kind: setting
     binding: { holding: 305, type: int16 }
     unit: "ppm"
     decimals: 0
@@ -1879,6 +2077,7 @@ signals:
 
   extract_ch3_barometric_pressure_correction:
     title: "Extract Channel 3 - Barometric Pressure Correction Value"
+    kind: setting
     binding: { holding: 306, type: int16 }
     unit: "hPa"
     scale: 0.1
@@ -1889,6 +2088,7 @@ signals:
 
   extract_ch3_carbon_dioxide_alert_1_level:
     title: "Extract Channel 3 - Carbon Dioxide Alert 1 Level"
+    kind: setting
     binding: { holding: 311, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1897,6 +2097,7 @@ signals:
 
   extract_ch3_carbon_dioxide_alert_2_level:
     title: "Extract Channel 3 - Carbon Dioxide Alert 2 Level"
+    kind: setting
     binding: { holding: 312, type: uint16 }
     unit: "ppm"
     range: [400, 5000]
@@ -1905,6 +2106,7 @@ signals:
 
   extract_ch3_voc_alert_1_level:
     title: "Extract Channel 3 - VOC Alert 1 Level"
+    kind: setting
     binding: { holding: 313, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1913,6 +2115,7 @@ signals:
 
   extract_ch3_voc_alert_2_level:
     title: "Extract Channel 3 - VOC Alert 2 Level"
+    kind: setting
     binding: { holding: 314, type: uint16 }
     unit: "index"
     range: [0, 500]
@@ -1920,11 +2123,42 @@ signals:
     present_when: extract_ch3_sensor_capability contains voc
 
   # ---------------------------------------------------------------------
+  # Internal properties: no Modbus binding
+  #
+  # These exist on the device but are not exposed on the bus. They are here
+  # because they are persisted or published state with an identity outside
+  # the firmware, so the firmware generates them from the same table as
+  # everything else instead of maintaining a parallel mechanism (D8).
+  #
+  # EXAMPLES ONLY -- the real internal list has to come from the firmware
+  # author. Two near-universal ones are shown so the shape is visible.
+  # ---------------------------------------------------------------------
+
+  supply_fan_calibration_offset:
+    title: "Supply Fan Calibration Offset"
+    kind: setting
+    unit: "%"
+    range: [-10.0, 10.0]
+    scale: 0.1
+    decimals: 1
+    default: 0.0
+    # Written at end of line test, never by an installer. Persisted.
+
+  nvm_write_count:
+    title: "NVM Write Count"
+    kind: measurement
+    access: read_only
+    unit: "writes"
+    range: [0, 4294967295]
+    # Wear counter. Published to the firmware's own diagnostics, not to the bus.
+
+  # ---------------------------------------------------------------------
   # Diagnostics (IR501+ in the library convention)
   # ---------------------------------------------------------------------
 
   mcu_temperature:
     title: "MCU Temperature"
+    kind: measurement
     binding: { input: 501, type: int16 }
     access: read_only
     unit: "°C"
@@ -1933,18 +2167,21 @@ signals:
 
   lifetime_days:
     title: "Lifetime - days"
+    kind: measurement
     binding: { input: 504, type: uint16 }
     access: read_only
     unit: "days"
 
   lifetime_minutes:
     title: "Lifetime - minutes"
+    kind: measurement
     binding: { input: 505, type: uint16 }
     access: read_only
     unit: "minutes"
 
   internal_voltage_12v:
     title: "Internal voltage - 12VDC"
+    kind: measurement
     binding: { input: 506, type: uint16 }
     access: read_only
     unit: "VDC"
@@ -1953,6 +2190,7 @@ signals:
 
   internal_voltage_3v3:
     title: "Internal voltage - 3.3VDC"
+    kind: measurement
     binding: { input: 507, type: uint16 }
     access: read_only
     unit: "VDC"
@@ -1961,6 +2199,7 @@ signals:
 
   device_reset:
     title: "Device Reset"
+    kind: command
     binding: { holding: 990, type: uint16 }
     access: write_only
     enum: { 0: idle, 1: reset }
