@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/modbus-device-profile/device-profile.schema.json",
+  "title": "Modbus device profile",
+  "description": "Shape of a device profile. This schema validates structure and vocabulary only. It cannot check that a signal reference resolves, that an enum member exists, or that an expression parses -- see validate.py for that layer, and DECISIONS.md D1 for why expressions became load-bearing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signals"],
+  "properties": {
+    "access": { "$ref": "#/$defs/access" },
+    "registers": {
+      "description": "Named raw registers that are not signals: locks, command words, scratch. Referenced from procedure steps as a binding name. PROVISIONAL -- introduced because procedures already write to binding unlock and binding cmd with nothing declaring them.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["binding"],
+        "properties": {
+          "binding": { "$ref": "#/$defs/binding" },
+          "title": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "signals": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/signal" }
+    },
+    "procedures": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/identifier" },
+      "additionalProperties": { "$ref": "#/$defs/procedure" }
+    }
+  },
+
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 48,
+      "description": "Also has to be a valid C identifier: the firmware X-macro pastes these into token names."
+    },
+
+    "expression": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Boolean expression over signal identifiers and enum member names. The reverse-dependency index is built by collecting signal identifiers out of these, so the grammar must stay small and total (DECISIONS.md D1). The grammar itself is not yet pinned down -- D3, open."
+    },
+
+    "enum_member": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+      "maxLength": 48,
+      "description": "Enum member name. Uppercase is allowed and often right -- acronyms like LPG read wrong lowercased, and C enum constants are conventionally uppercase. Must still be a valid C identifier for the X-macro. Member names are compared case-sensitively wherever expressions mention them."
+    },
+
+    "signal_ref": { "$ref": "#/$defs/identifier" },
+
+    "value": {
+      "description": "A register value: an integer, a boolean, an enum member name, or a procedure parameter reference.",
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "boolean" },
+        { "type": "string", "pattern": "^\\$param\\.[a-z][a-z0-9_]*$" },
+        { "$ref": "#/$defs/enum_member" }
+      ]
+    },
+
+    "range": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[min, max] in engineering units, after scale is applied."
+    },
+
+    "enum_map": {
+      "type": "object",
+      "description": "Raw register value -> member name.",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^(0|[1-9][0-9]*|0x[0-9a-fA-F]+)$" },
+      "additionalProperties": { "$ref": "#/$defs/enum_member" }
+    },
+
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Transport-level facts about what this device tolerates, as opposed to what Modbus permits.",
+      "properties": {
+        "supported_fc": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "enum": [1, 2, 3, 4, 5, 6, 15, 16, 23] }
+        },
+        "max_read_words": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "max_write_words": { "type": "integer", "minimum": 1, "maximum": 123 },
+        "gaps_readable": { "type": "boolean" },
+        "turnaround_ms": { "type": "number", "minimum": 0 },
+        "byte_order": { "enum": ["big", "little"] },
+        "word_order": { "enum": ["big", "little"] }
+      }
+    },
+
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the value lives. Exactly one of holding/input/coil/discrete names both the table and the address.",
+      "oneOf": [
+        { "required": ["holding"] },
+        { "required": ["input"] },
+        { "required": ["coil"] },
+        { "required": ["discrete"] }
+      ],
+      "properties": {
+        "holding": { "$ref": "#/$defs/address" },
+        "input": { "$ref": "#/$defs/address" },
+        "coil": { "$ref": "#/$defs/address" },
+        "discrete": { "$ref": "#/$defs/address" },
+        "type": { "$ref": "#/$defs/data_type" },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Element count for arrays and strings. Omitted means 1."
+        },
+        "bit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63,
+          "description": "Bit position, for a flag packed inside a register."
+        },
+        "word_order": { "enum": ["big", "little"], "description": "Overrides access.word_order for this binding." }
+      },
+      "dependentSchemas": {
+        "bit": {
+          "required": ["type"],
+          "properties": { "type": { "const": "bool" } }
+        }
+      }
+    },
+
+    "address": { "type": "integer", "minimum": 0, "maximum": 65535 },
+
+    "data_type": {
+      "description": "Provisional list -- extend as devices need it. Widths drive both the register count and the firmware accessor.",
+      "enum": ["bool", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64", "string"]
+    },
+
+    "presentation": {
+      "description": "How a raw value becomes an engineering value. Shared by a signal and by each of its variants.",
+      "type": "object",
+      "properties": {
+        "unit": { "type": "string" },
+        "scale": { "type": "number", "not": { "const": 0 } },
+        "offset": { "type": "number" },
+        "range": { "$ref": "#/$defs/range" },
+        "step": { "type": "number", "exclusiveMinimum": 0 },
+        "enum": { "$ref": "#/$defs/enum_map" }
+      }
+    },
+
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding"],
+      "allOf": [
+        { "$ref": "#/$defs/presentation" },
+        {
+          "description": "Presentation comes from exactly one place. If variants are given, the signal must not also carry a top-level interpretation -- otherwise there are two answers and no rule for which wins.",
+          "if": { "required": ["variants"] },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["unit"] },
+                { "required": ["scale"] },
+                { "required": ["offset"] },
+                { "required": ["range"] },
+                { "required": ["enum"] }
+              ]
+            }
+          }
+        }
+      ],
+      "properties": {
+        "binding": { "$ref": "#/$defs/binding" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "access": {
+          "description": "Privilege required to write. Absent means freely writable if the binding allows it. PROVISIONAL -- this ladder is invented, not derived from the source profile.",
+          "enum": ["user", "commissioning", "factory"]
+        },
+
+        "unit": true,
+        "scale": true,
+        "offset": true,
+        "range": true,
+        "step": true,
+        "enum": true,
+
+        "present_when": { "$ref": "#/$defs/expression" },
+        "valid_when": { "$ref": "#/$defs/expression" },
+        "writable_when": { "$ref": "#/$defs/expression" },
+
+        "variants": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Alternative interpretations of the same register, one per configuration. A single variant is a modelling mistake: use top-level presentation instead.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["effective_when"],
+            "allOf": [{ "$ref": "#/$defs/presentation" }],
+            "properties": {
+              "effective_when": { "$ref": "#/$defs/expression" },
+              "unit": true,
+              "scale": true,
+              "offset": true,
+              "range": true,
+              "step": true,
+              "enum": true
+            }
+          }
+        },
+
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Range/default/step that depend on configuration. First matching entry wins.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["when"],
+            "anyOf": [
+              { "required": ["range"] },
+              { "required": ["default"] },
+              { "required": ["step"] }
+            ],
+            "properties": {
+              "when": { "$ref": "#/$defs/expression" },
+              "range": { "$ref": "#/$defs/range" },
+              "default": { "type": ["number", "string", "boolean"] },
+              "step": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+
+        "on_write": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reread": {
+              "description": "What to re-read after writing this signal. The literal 'dependents' resolves against the derived reverse index; an explicit list covers registers the device re-clamps without any expression saying so.",
+              "oneOf": [
+                { "const": "dependents" },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "$ref": "#/$defs/signal_ref" }
+                }
+              ]
+            },
+            "settle_ms": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+
+    "condition": {
+      "type": "object",
+      "required": ["signal"],
+      "oneOf": [{ "required": ["equals"] }, { "required": ["in"] }],
+      "properties": {
+        "signal": { "$ref": "#/$defs/signal_ref" },
+        "equals": { "$ref": "#/$defs/value" },
+        "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } }
+      }
+    },
+
+    "target": {
+      "description": "A step operates on a named signal or on a named raw register, never both.",
+      "type": "object",
+      "oneOf": [{ "required": ["signal"] }, { "required": ["binding"] }],
+      "properties": {
+        "signal": { "$ref": "#/$defs/signal_ref" },
+        "binding": { "$ref": "#/$defs/identifier" }
+      }
+    },
+
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["write"] },
+        { "required": ["read"] },
+        { "required": ["reread"] },
+        { "required": ["await"] },
+        { "required": ["delay_ms"] }
+      ],
+      "properties": {
+        "title": { "type": "string" },
+        "write": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "allOf": [{ "$ref": "#/$defs/target" }],
+          "properties": {
+            "signal": true,
+            "binding": true,
+            "value": { "$ref": "#/$defs/value" }
+          }
+        },
+        "read": {
+          "type": "object",
+          "additionalProperties": false,
+          "allOf": [{ "$ref": "#/$defs/target" }],
+          "properties": { "signal": true, "binding": true }
+        },
+        "reread": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/signal_ref" }
+        },
+        "await": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeout_ms"],
+          "allOf": [{ "$ref": "#/$defs/condition" }],
+          "properties": {
+            "signal": true,
+            "equals": true,
+            "in": true,
+            "timeout_ms": { "type": "number", "exclusiveMinimum": 0 },
+            "poll_ms": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "delay_ms": { "type": "number", "minimum": 0 },
+        "verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["read"],
+          "oneOf": [{ "required": ["equals"] }, { "required": ["in"] }],
+          "properties": {
+            "read": { "$ref": "#/$defs/signal_ref" },
+            "equals": { "$ref": "#/$defs/value" },
+            "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } },
+            "timeout_ms": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+
+    "procedure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "steps"],
+      "dependentRequired": { "confirm": ["danger"] },
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "danger": {
+          "enum": ["low", "medium", "high"],
+          "description": "Drives how loudly the commissioning tool asks before running."
+        },
+        "confirm": {
+          "type": "string",
+          "description": "Shown verbatim before running. Says what breaks, not 'are you sure'."
+        },
+        "duration_ms": { "type": "number", "minimum": 0, "description": "Expected wall time, for progress UI." },
+        "preconditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/expression" }
+        },
+        "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+        "on_failure": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "success": { "$ref": "#/$defs/condition" },
+            "failure": { "$ref": "#/$defs/condition" }
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "oneOf": [{ "required": ["enum_from"] }, { "required": ["type"] }],
+            "properties": {
+              "enum_from": { "$ref": "#/$defs/signal_ref", "description": "Take the allowed values from that signal's enum." },
+              "type": { "$ref": "#/$defs/data_type" },
+              "range": { "$ref": "#/$defs/range" },
+              "default": { "type": ["number", "string", "boolean"] },
+              "title": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=device-profile.schema.json
 access:
   supported_fc: [3, 4, 6, 16]
   max_read_words: 32       # device-specific, not the Modbus 125 limit
