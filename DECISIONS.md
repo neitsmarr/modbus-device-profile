@@ -301,3 +301,69 @@ numbers to weigh it against are in D4.
 - The client interface is modelled as configuration only. What it polls on the
   far side is another device's profile, and how one profile references another
   is not decided.
+
+## D7 — Pre-heater, bypass, efficiency and filters
+
+Added, now that they are confirmed: an optional pre-heater, a modulating
+(analog) bypass, calculated heat recovery efficiency, and filter monitoring.
+209 signals, 130 holding and 79 input registers, six procedures, 2095 lines.
+
+**The pre-heater is the first hardware option, and `present_when` earns itself.**
+`preheater_installed` is the single register the whole block hangs off: on a
+unit without the heater, the other nine registers are *absent*, not idle. Every
+one carries `present_when: preheater_installed == installed`, and the derived
+index reports the six-way fan-out, so a commissioning tool re-reads the block
+after the option is set. This is the shape every future option should take: one
+declaring register, presence conditions on the dependents, nothing listing what
+it controls.
+
+**Efficiency exposed a real gap: a channel knows what it measures, not where it
+is.** Heat recovery efficiency is (supply − outdoor) / (extract − outdoor), so
+it needs four named points in the air path, and nothing in the profile said
+which of the six sensor channels sits at each. Two ways to fix it:
+
+- assign a role to each channel, then have efficiency ask "which channel is the
+  outdoor one?" — a quantifier over channels, which D5 rules out; or
+- have each air path point name its source channel.
+
+The second, adopted, is also the library's own `Output N Source` pattern, so it
+is not a new idea in this codebase. Four `*_temperature_source` selectors, four
+derived temperatures each `valid_when` its source is assigned, and efficiency
+`valid_when` all three of its inputs are. Flat, no quantifiers, four short
+expressions instead of an eighteen-term disjunction.
+
+It leaves one check no expression here can make: that the channel a source
+names actually reports temperature — its `sensor_capability` must contain
+`temperature`. That is a cross-signal, second-order condition (a property of
+the signal a *value* points at, not of a signal an expression names), and it
+belongs in the semantic layer, not the format. Noted in the profile beside the
+selectors.
+
+**Bypass is modulating, so it is an output, not a switch.** It gets the same
+vocabulary as the fans — output type, minimum and maximum output value,
+position feedback, state flags — plus the automatic-mode thresholds. Its state
+includes `held_closed_by_missing_temperature`, because automatic bypass silently
+depends on the air path sources above.
+
+**Filters: both candidate mechanisms are modelled, neither is chosen.** That
+filters get monitored is settled; how is not. `filter_monitoring_mode` selects
+`elapsed_time` or `differential_pressure`, and each mechanism's registers are
+present only under its own mode, so the decision can be made later without
+reshaping the map.
+
+This is marked PROVISIONAL in the profile for a concrete reason, not caution:
+differential pressure needs a sensor the hardware list does not contain. The
+I2C channels measure *barometric* pressure, not differential, so the
+differential-pressure branch presumes hardware that may not exist. Deciding
+filters therefore means deciding hardware first. If it lands on elapsed time,
+delete the three differential registers and the mode enum collapses to a
+boolean.
+
+**Status words grew** rather than new alarm registers being invented:
+`preheater_fault` and `bypass_fault` join `device_status_errors`,
+`filter_replacement_due` and `efficiency_below_expected` join the warnings.
+
+**Still open after this:** every address remains invented; reheater is not
+modelled (only the pre-heater was confirmed); and the cross-check that a
+temperature source names a temperature-capable channel needs writing into
+`validate.py`.

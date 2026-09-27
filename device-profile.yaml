@@ -230,6 +230,8 @@ signals:
       3: supply_fan_fault
       4: extract_fan_fault
       5: sensor_bus_fault
+      6: preheater_fault
+      7: bypass_fault
 
   device_status_warnings:
     title: "Device Status - Warnings"
@@ -240,6 +242,8 @@ signals:
       1: internal_voltage_warning
       2: sensor_replacement_due
       3: client_interface_degraded
+      4: filter_replacement_due
+      5: efficiency_below_expected
 
   supply_voltage:
     title: "Supply Voltage"
@@ -254,6 +258,350 @@ signals:
     binding: { input: 12, type: uint16 }
     access: read_only
     enum: { 0: idle, 1: ventilating, 2: boosting, 3: away, 4: fault }
+
+  # ---------------------------------------------------------------------
+  # Air path temperatures and heat recovery efficiency
+  #
+  # A sensor channel knows what it can measure but not where it sits in the
+  # air path, and efficiency needs to know. Rather than assign roles to
+  # channels -- which would need a quantifier over channels, and D5 rules
+  # that out -- each air path point names its source channel, following the
+  # library's "Output N Source" pattern.
+  # ---------------------------------------------------------------------
+  outdoor_air_temperature_source:
+    title: "Outdoor Air Temperature Source"
+    binding: { holding: 31, type: uint16 }
+    enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
+    default: none
+    # A commissioning tool should also check the named channel actually
+    # reports temperature: its sensor_capability must contain temperature.
+    # That is a cross-signal check no expression here can make.
+    on_write:
+      reread: dependents
+      settle_ms: 500
+  supply_air_temperature_source:
+    title: "Supply Air Temperature Source"
+    binding: { holding: 32, type: uint16 }
+    enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
+    default: none
+    # A commissioning tool should also check the named channel actually
+    # reports temperature: its sensor_capability must contain temperature.
+    # That is a cross-signal check no expression here can make.
+    on_write:
+      reread: dependents
+      settle_ms: 500
+  extract_air_temperature_source:
+    title: "Extract Air Temperature Source"
+    binding: { holding: 33, type: uint16 }
+    enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
+    default: none
+    # A commissioning tool should also check the named channel actually
+    # reports temperature: its sensor_capability must contain temperature.
+    # That is a cross-signal check no expression here can make.
+    on_write:
+      reread: dependents
+      settle_ms: 500
+  exhaust_air_temperature_source:
+    title: "Exhaust Air Temperature Source"
+    binding: { holding: 34, type: uint16 }
+    enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
+    default: none
+    # A commissioning tool should also check the named channel actually
+    # reports temperature: its sensor_capability must contain temperature.
+    # That is a cross-signal check no expression here can make.
+    on_write:
+      reread: dependents
+      settle_ms: 500
+  outdoor_air_temperature:
+    title: "Outdoor Air Temperature"
+    binding: { input: 21, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    valid_when: outdoor_air_temperature_source != none
+  supply_air_temperature:
+    title: "Supply Air Temperature"
+    binding: { input: 22, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    valid_when: supply_air_temperature_source != none
+  extract_air_temperature:
+    title: "Extract Air Temperature"
+    binding: { input: 23, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    valid_when: extract_air_temperature_source != none
+  exhaust_air_temperature:
+    title: "Exhaust Air Temperature"
+    binding: { input: 24, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    valid_when: exhaust_air_temperature_source != none
+  heat_recovery_efficiency:
+    title: "Heat Recovery Efficiency"
+    binding: { input: 25, type: uint16 }
+    access: read_only
+    unit: "%"
+    range: [0, 100]
+    # (supply - outdoor) / (extract - outdoor). Undefined while any of the
+    # three sources is unassigned; the firmware also suppresses it when
+    # extract and outdoor are too close together to divide by.
+    valid_when: >-
+      outdoor_air_temperature_source != none and
+      supply_air_temperature_source != none and
+      extract_air_temperature_source != none
+
+  # ---------------------------------------------------------------------
+  # Pre-heater (hardware option)
+  # ---------------------------------------------------------------------
+
+  preheater_installed:
+    title: "Pre-heater Installed"
+    binding: { holding: 41, type: uint16 }
+    enum: { 0: not_installed, 1: installed }
+    default: not_installed
+    # The option this whole block hangs off. On a unit without the pre-heater
+    # every register below is absent, not merely idle.
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  preheater_control_mode:
+    title: "Pre-heater Control Mode"
+    binding: { holding: 42, type: uint16 }
+    enum: { 0: disabled, 1: frost_protection, 2: supply_temperature }
+    default: frost_protection
+    present_when: preheater_installed == installed
+    on_write:
+      reread: dependents
+
+  preheater_output_type:
+    title: "Pre-heater Output Type"
+    binding: { holding: 43, type: uint16 }
+    enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
+    default: v0_10
+    present_when: preheater_installed == installed
+
+  preheater_minimum_output_value:
+    title: "Pre-heater Minimum Output Value"
+    binding: { holding: 44, type: uint16 }
+    unit: "%"
+    range: [0, 50]
+    default: 0
+    present_when: preheater_installed == installed
+
+  preheater_maximum_output_value:
+    title: "Pre-heater Maximum Output Value"
+    binding: { holding: 45, type: uint16 }
+    unit: "%"
+    range: [50, 100]
+    default: 100
+    present_when: preheater_installed == installed
+
+  preheater_frost_protection_setpoint:
+    title: "Pre-heater Frost Protection Setpoint"
+    binding: { holding: 46, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-20.0, 5.0]
+    default: -3.0
+    present_when: preheater_control_mode == frost_protection
+
+  preheater_supply_temperature_setpoint:
+    title: "Pre-heater Supply Temperature Setpoint"
+    binding: { holding: 47, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [5.0, 25.0]
+    default: 16.0
+    present_when: preheater_control_mode == supply_temperature
+
+  preheater_output_value:
+    title: "Pre-heater Output Value"
+    binding: { input: 31, type: uint16 }
+    access: read_only
+    unit: "%"
+    range: [0, 100]
+    valid_when: preheater_installed == installed
+
+  preheater_state:
+    title: "Pre-heater State"
+    binding: { input: 32, type: uint16 }
+    access: read_only
+    flags:
+      0: heater_fault
+      1: thermal_cutout_open
+      2: output_saturated
+      3: frost_protection_active
+    valid_when: preheater_installed == installed
+
+  # ---------------------------------------------------------------------
+  # Heat exchanger bypass (modulating, analog control)
+  # ---------------------------------------------------------------------
+
+  bypass_control_mode:
+    title: "Bypass Control Mode"
+    binding: { holding: 51, type: uint16 }
+    enum: { 0: disabled, 1: automatic, 2: manual }
+    default: automatic
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  bypass_output_type:
+    title: "Bypass Output Type"
+    binding: { holding: 52, type: uint16 }
+    enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
+    default: v0_10
+    present_when: bypass_control_mode != disabled
+
+  bypass_minimum_output_value:
+    title: "Bypass Minimum Output Value"
+    binding: { holding: 53, type: uint16 }
+    unit: "%"
+    range: [0, 40]
+    default: 0
+    present_when: bypass_control_mode != disabled
+    # The damper's closed end stop, as a percentage of the analog output.
+
+  bypass_maximum_output_value:
+    title: "Bypass Maximum Output Value"
+    binding: { holding: 54, type: uint16 }
+    unit: "%"
+    range: [60, 100]
+    default: 100
+    present_when: bypass_control_mode != disabled
+
+  bypass_outdoor_temperature_threshold:
+    title: "Bypass Outdoor Temperature Threshold"
+    binding: { holding: 55, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [10.0, 30.0]
+    default: 18.0
+    present_when: bypass_control_mode == automatic
+
+  bypass_extract_temperature_threshold:
+    title: "Bypass Extract Temperature Threshold"
+    binding: { holding: 56, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [18.0, 30.0]
+    default: 22.0
+    present_when: bypass_control_mode == automatic
+
+  bypass_manual_position:
+    title: "Bypass Manual Position"
+    binding: { holding: 57, type: uint16 }
+    unit: "%"
+    range: [0, 100]
+    step: 5
+    default: 0
+    present_when: bypass_control_mode == manual
+
+  bypass_position:
+    title: "Bypass Position"
+    binding: { input: 41, type: uint16 }
+    access: read_only
+    unit: "%"
+    range: [0, 100]
+    valid_when: bypass_control_mode != disabled
+
+  bypass_state:
+    title: "Bypass State"
+    binding: { input: 42, type: uint16 }
+    access: read_only
+    flags:
+      0: damper_fault
+      1: position_feedback_missing
+      2: held_closed_by_frost_protection
+      3: held_closed_by_missing_temperature
+    valid_when: bypass_control_mode != disabled
+
+  # ---------------------------------------------------------------------
+  # Filter monitoring
+  #
+  # PROVISIONAL. That filters get monitored is settled; how is not. Both
+  # candidate mechanisms are modelled behind filter_monitoring_mode so the
+  # decision can be made without reshaping the map -- but differential
+  # pressure needs a sensor the current hardware list does not include
+  # (the I2C channels measure barometric, not differential, pressure).
+  # See DECISIONS.md D7.
+  # ---------------------------------------------------------------------
+
+  filter_monitoring_mode:
+    title: "Filter Monitoring Mode"
+    binding: { holding: 61, type: uint16 }
+    enum: { 0: disabled, 1: elapsed_time, 2: differential_pressure }
+    default: elapsed_time
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  filter_replacement_interval:
+    title: "Filter Replacement Interval"
+    binding: { holding: 62, type: uint16 }
+    unit: "days"
+    range: [30, 365]
+    default: 90
+    present_when: filter_monitoring_mode == elapsed_time
+
+  filter_differential_pressure_threshold:
+    title: "Filter Differential Pressure Threshold"
+    binding: { holding: 63, type: uint16 }
+    unit: "Pa"
+    range: [50, 500]
+    default: 200
+    present_when: filter_monitoring_mode == differential_pressure
+
+  filter_elapsed_time:
+    title: "Filter Elapsed Time"
+    binding: { input: 51, type: uint16 }
+    access: read_only
+    unit: "days"
+    range: [0, 999]
+    valid_when: filter_monitoring_mode == elapsed_time
+
+  filter_differential_pressure:
+    title: "Filter Differential Pressure"
+    binding: { input: 52, type: uint16 }
+    access: read_only
+    unit: "Pa"
+    range: [0, 1000]
+    valid_when: filter_monitoring_mode == differential_pressure
+
+  filter_state:
+    title: "Filter State"
+    binding: { input: 53, type: uint16 }
+    access: read_only
+    flags:
+      0: replacement_due
+      1: replacement_overdue
+      2: pressure_sensor_fault
+    valid_when: filter_monitoring_mode != disabled
+
+  filter_counter_reset:
+    title: "Filter Counter Reset"
+    binding: { holding: 64, type: uint16 }
+    access: write_only
+    enum: { 0: idle, 1: reset }
+    default: idle
+    present_when: filter_monitoring_mode == elapsed_time
 
   # ---------------------------------------------------------------------
   # Supply air chain: EC fan, auxiliary digital input
@@ -1708,3 +2056,40 @@ procedures:
     params:
       minimum: { type: uint16, range: [20, 60], default: 30, title: "Minimum output" }
       maximum: { type: uint16, range: [60, 100], default: 100, title: "Maximum output" }
+
+  assign_air_path_temperatures:
+    title: "Assign air path temperature sources"
+    danger: medium
+    confirm: "Heat recovery efficiency, automatic bypass and pre-heater control
+      all read these. A source pointing at a channel with no temperature sensor
+      disables them silently."
+    preconditions:
+      - operating_mode == standby
+    steps:
+      - write: { signal: outdoor_air_temperature_source, value: $param.outdoor }
+      - write: { signal: supply_air_temperature_source, value: $param.supply }
+      - write: { signal: extract_air_temperature_source, value: $param.extract }
+      - write: { signal: exhaust_air_temperature_source, value: $param.exhaust }
+      - delay_ms: 500
+      - reread:
+          - outdoor_air_temperature
+          - supply_air_temperature
+          - extract_air_temperature
+          - exhaust_air_temperature
+          - heat_recovery_efficiency
+    params:
+      outdoor: { enum_from: outdoor_air_temperature_source }
+      supply: { enum_from: supply_air_temperature_source }
+      extract: { enum_from: extract_air_temperature_source }
+      exhaust: { enum_from: exhaust_air_temperature_source }
+
+  reset_filter_counter:
+    title: "Reset filter counter"
+    danger: low
+    confirm: "Only do this when the filters have actually been replaced."
+    steps:
+      - write: { signal: filter_counter_reset, value: reset }
+      - delay_ms: 500
+      - reread: [filter_elapsed_time, filter_state]
+    outcome:
+      success: { signal: filter_state, not_contains: replacement_due }
