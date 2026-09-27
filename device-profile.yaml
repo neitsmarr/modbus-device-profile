@@ -1,82 +1,1710 @@
 # yaml-language-server: $schema=device-profile.schema.json
+#
+# Residential air handling unit: two air chains, one EC fan per chain, up to
+# three I2C sensor channels per chain, one auxiliary digital input per chain,
+# a Modbus server interface and a Modbus client interface.
+#
+# Naming and value conventions follow the company device library
+# (3SModbus/DeviceLibrary): '<Measurand> Level', '<Measurand> Correction
+# Value', 'Minimum/Maximum Output Value', 'Sensor State' as a bit field,
+# 'Alerts' as OK / Yellow / Red, and the HR1-HR10 common block.
+#
+# ASSUMPTIONS, all needing confirmation against firmware:
+#   - every address below is invented; only the layout style is borrowed
+#   - address blocks: HR1-19 interfaces, HR21-39 unit, HR101-155 chains,
+#     HR201-330 sensor channels (20 apart), HR990 reset; IR mirrors it
+#   - bypass, preheater/reheater, heat-recovery and filter monitoring are
+#     NOT modelled: they were not in the hardware list, though a residential
+#     AHU normally has them
+#   - the client interface is modelled as configuration only; the polled
+#     remote registers it reads are a separate profile, not this one
+
+device:
+  name: "AHU-1"
+  description: "Residential air handling unit with heat recovery"
+  type: 4010                  # placeholder series id
+  firmware_version: "1.0"
+
 access:
   supported_fc: [3, 4, 6, 16]
-  max_read_words: 32       # device-specific, not the Modbus 125 limit
+  max_read_words: 32
   max_write_words: 16
-  gaps_readable: true      # safe to read across unmapped addresses
+  gaps_readable: true         # ASSUMPTION: blocks span unmapped addresses safely
   turnaround_ms: 5
 
 signals:
-  humidity_mode:
-    binding: { holding: 0x0040, type: uint16 }
-    access: commissioning
-    enum: { 0: relative, 1: absolute }
 
-  humidity:
-    binding: { input: 0x0010, type: uint16 }
-    variants:
-      - effective_when: humidity_mode == relative
-        unit: "%RH"
-        scale: 0.1
-        range: [0, 100]
-      - effective_when: humidity_mode == absolute
-        unit: "g/m3"
-        scale: 0.1
-        range: [0, 50]
+  # ---------------------------------------------------------------------
+  # Modbus server interface and device identity (HR1-HR10 common block)
+  # ---------------------------------------------------------------------
 
-  gas_type:
-    binding: { holding: 0x0050, type: uint16 }
-    access: commissioning
-    enum: { 0: LPG, 1: propane, 2: methane }
+  server_slave_address:
+    title: "Device Slave Address"
+    binding: { holding: 1, type: uint16 }
+    range: [1, 247]
+    default: 1
+
+  server_baud_rate:
+    title: "Modbus Baud Rate"
+    binding: { holding: 2, type: uint16 }
+    unit: "bps"
+    enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
+    default: b19200
+
+  server_parity:
+    title: "Modbus Parity"
+    binding: { holding: 3, type: uint16 }
+    enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
+    default: even_8e1
+
+  device_type:
+    title: "Device Type"
+    binding: { holding: 4, type: uint16 }
+    access: read_only
+
+  hardware_version:
+    title: "Hardware Version"
+    binding: { holding: 5, type: uint16 }
+    access: read_only
+    # packed BCD-style bytes in the library format; see the open formatting
+    # question in DECISIONS.md D6
+
+  firmware_version:
+    title: "Firmware Version"
+    binding: { holding: 6, type: uint16 }
+    access: read_only
+
+  server_termination_resistor:
+    title: "Network Bus Termination Resistor"
+    binding: { holding: 9, type: uint16 }
+    enum: { 0: disconnected, 1: connected }
+    default: disconnected
+
+  modbus_registers_reset:
+    title: "Modbus Registers Reset"
+    binding: { holding: 10, type: uint16 }
+    access: write_only
+    enum: { 0: idle, 1: reset }
+    default: idle
+
+  # ---------------------------------------------------------------------
+  # Modbus client interface -- the AHU polling its own peripherals
+  # ---------------------------------------------------------------------
+
+  client_enable:
+    title: "Client Interface Enable"
+    binding: { holding: 11, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: disabled
     on_write:
-      # 'dependents' resolves via the derived reverse index: every signal
-      # whose *_when / constraints[].when expressions reference gas_type.
       reread: dependents
       settle_ms: 200
 
-  alarm_level_1:
-    binding: { holding: 0x0060, type: uint16 }
-    access: commissioning
-    unit: "%LEL"
+  client_baud_rate:
+    title: "Client Baud Rate"
+    binding: { holding: 12, type: uint16 }
+    unit: "bps"
+    enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
+    default: b19200
+    present_when: client_enable == enabled
+
+  client_parity:
+    title: "Client Parity"
+    binding: { holding: 13, type: uint16 }
+    enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
+    default: even_8e1
+    present_when: client_enable == enabled
+
+  client_poll_interval:
+    title: "Client Poll Interval"
+    binding: { holding: 14, type: uint16 }
+    unit: "ms"
+    range: [100, 10000]
+    step: 100
+    default: 1000
+    present_when: client_enable == enabled
+
+  client_response_timeout:
+    title: "Client Response Timeout"
+    binding: { holding: 15, type: uint16 }
+    unit: "ms"
+    range: [50, 5000]
+    default: 500
+    present_when: client_enable == enabled
+
+  client_retry_count:
+    title: "Client Retry Count"
+    binding: { holding: 16, type: uint16 }
+    range: [0, 5]
+    default: 2
+    present_when: client_enable == enabled
+
+  client_state:
+    title: "Client Interface State"
+    binding: { input: 11, type: uint16 }
+    access: read_only
+    enum: { 0: idle, 1: polling, 2: degraded, 3: bus_fault }
+    valid_when: client_enable == enabled
+
+  # ---------------------------------------------------------------------
+  # Unit-level configuration and state
+  # ---------------------------------------------------------------------
+
+  left_right_swap:
+    title: "Left-Right Swap"
+    binding: { holding: 21, type: uint16 }
+    enum: { 0: normal, 1: swapped }
+    default: normal
+    # Exchanges which physical side each air chain drives. Every chain and
+    # channel reading below is reported in logical (supply/extract) terms, so
+    # nothing here is conditional on it -- the mapping happens in firmware.
+    # It is still a commissioning-critical write: see swap_air_chains.
+    on_write:
+      settle_ms: 1000
+
+  operating_mode:
+    title: "Operating Mode"
+    binding: { holding: 22, type: uint16 }
+    enum: { 0: standby, 1: manual, 2: automatic, 3: boost, 4: away }
+    default: automatic
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  ventilation_level:
+    title: "Ventilation Level"
+    binding: { holding: 23, type: uint16 }
+    unit: "%"
+    range: [0, 100]
+    step: 5
+    default: 50
+    writable_when: operating_mode == manual
+
+  co2_setpoint:
+    title: "Carbon Dioxide Setpoint"
+    binding: { holding: 24, type: uint16 }
+    unit: "ppm"
+    range: [600, 1500]
+    step: 50
+    default: 900
+    present_when: operating_mode == automatic
+
+  humidity_setpoint:
+    title: "Relative Humidity Setpoint"
+    binding: { holding: 25, type: uint16 }
+    unit: "%RH"
+    range: [30, 70]
+    default: 55
+    present_when: operating_mode == automatic
+
+  modbus_safety_timeout:
+    title: "Modbus Safety Timeout"
+    binding: { holding: 26, type: uint16 }
+    unit: "minutes"
+    range: [0, 240]
+    default: 0
+    # 0 disables the fallback; any other value returns the unit to
+    # automatic when the server interface goes quiet that long.
+
+  sensor_bus_rescan:
+    title: "Sensor Bus Rescan"
+    binding: { holding: 27, type: uint16 }
+    access: write_only
+    enum: { 0: idle, 1: rescan }
+    default: idle
+
+  sensor_bus_state:
+    title: "Sensor Bus State"
+    binding: { input: 13, type: uint16 }
+    access: read_only
+    enum: { 0: idle, 1: scanning, 2: complete, 3: failed }
+
+  device_status_errors:
+    title: "Device Status - Errors"
+    binding: { input: 1, type: uint16 }
+    access: read_only
+    flags:
+      0: supply_voltage_fault
+      1: internal_voltage_fault
+      2: memory_fault
+      3: supply_fan_fault
+      4: extract_fan_fault
+      5: sensor_bus_fault
+
+  device_status_warnings:
+    title: "Device Status - Warnings"
+    binding: { input: 2, type: uint16 }
+    access: read_only
+    flags:
+      0: supply_voltage_warning
+      1: internal_voltage_warning
+      2: sensor_replacement_due
+      3: client_interface_degraded
+
+  supply_voltage:
+    title: "Supply Voltage"
+    binding: { input: 3, type: uint16 }
+    access: read_only
+    unit: "VDC"
     scale: 0.1
-    constraints:
-      - when: gas_type == LPG
-        range: [50, 200]
-        default: 100
-      - when: gas_type == methane
-        range: [50, 250]
-        default: 100
+    decimals: 1
+
+  application_state:
+    title: "Application State"
+    binding: { input: 12, type: uint16 }
+    access: read_only
+    enum: { 0: idle, 1: ventilating, 2: boosting, 3: away, 4: fault }
+
+  # ---------------------------------------------------------------------
+  # Supply air chain: EC fan, auxiliary digital input
+  # ---------------------------------------------------------------------
+
+  supply_fan_control_source:
+    title: "Supply Fan Control Source"
+    binding: { holding: 101, type: uint16 }
+    enum: { 0: analog_output, 1: modbus }
+    default: analog_output
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  supply_fan_analog_output_type:
+    title: "Supply Fan Analog Output Type"
+    binding: { holding: 102, type: uint16 }
+    enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
+    default: v0_10
+    present_when: supply_fan_control_source == analog_output
+
+  supply_fan_minimum_output_value:
+    title: "Supply Fan Minimum Output Value"
+    binding: { holding: 103, type: uint16 }
+    unit: "%"
+    range: [20, 60]
+    default: 30
+
+  supply_fan_maximum_output_value:
+    title: "Supply Fan Maximum Output Value"
+    binding: { holding: 104, type: uint16 }
+    unit: "%"
+    range: [60, 100]
+    default: 100
+
+  supply_fan_start_output_value:
+    title: "Supply Fan Start Output Value"
+    binding: { holding: 105, type: uint16 }
+    unit: "%"
+    range: [20, 100]
+    default: 50
+
+  supply_fan_kickstart_control:
+    title: "Supply Fan Kickstart Control"
+    binding: { holding: 106, type: uint16 }
+    enum: { 0: softstart, 1: kickstart }
+    default: softstart
+
+  supply_fan_kickstart_time:
+    title: "Supply Fan Kickstart Time"
+    binding: { holding: 107, type: uint16 }
+    unit: "seconds"
+    range: [2, 10]
+    default: 5
+    present_when: supply_fan_kickstart_control == kickstart
+
+  supply_fan_modbus_slave_address:
+    title: "Supply Fan Modbus Slave Address"
+    binding: { holding: 108, type: uint16 }
+    range: [1, 247]
+    default: 1
+    present_when: supply_fan_control_source == modbus
+
+  supply_fan_modbus_speed_register:
+    title: "Supply Fan Modbus Speed Register"
+    binding: { holding: 109, type: uint16 }
+    range: [1, 65535]
+    present_when: supply_fan_control_source == modbus
+
+  supply_fan_overwrite_enable:
+    title: "Supply Fan Overwrite Enable"
+    binding: { holding: 110, type: uint16 }
+    enum: { 0: automatic, 1: overwrite }
+    default: automatic
+    on_write:
+      reread: dependents
+
+  supply_fan_overwrite_value:
+    title: "Supply Fan Overwrite Value"
+    binding: { holding: 111, type: uint16 }
+    unit: "%"
+    range: [0, 100]
+    default: 50
+    present_when: supply_fan_overwrite_enable == overwrite
+
+  supply_digital_input_function:
+    title: "Supply Digital Input Function"
+    binding: { holding: 116, type: uint16 }
+    enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
+    default: disabled
+    on_write:
+      reread: dependents
+
+  supply_digital_input_polarity:
+    title: "Supply Digital Input Polarity"
+    binding: { holding: 117, type: uint16 }
+    enum: { 0: normally_open, 1: normally_closed }
+    default: normally_open
+    present_when: supply_digital_input_function != disabled
+
+  supply_fan_output_value:
+    title: "Supply Fan Output Value"
+    binding: { input: 101, type: uint16 }
+    access: read_only
+    unit: "%"
+    range: [0, 100]
+
+  supply_fan_speed:
+    title: "Supply Fan Speed"
+    binding: { input: 102, type: uint16 }
+    access: read_only
+    unit: "rpm"
+    range: [0, 5000]
+
+  supply_fan_state:
+    title: "Supply Fan State"
+    binding: { input: 103, type: uint16 }
+    access: read_only
+    flags:
+      0: fan_fault
+      1: tacho_missing
+      2: modbus_timeout
+      3: blocked_rotor
+
+  supply_digital_input_state:
+    title: "Supply Digital Input State"
+    binding: { input: 104, type: uint16 }
+    access: read_only
+    enum: { 0: low, 1: high }
+    valid_when: supply_digital_input_function != disabled
+
+  # ---------------------------------------------------------------------
+  # Extract air chain: EC fan, auxiliary digital input
+  # ---------------------------------------------------------------------
+
+  extract_fan_control_source:
+    title: "Extract Fan Control Source"
+    binding: { holding: 131, type: uint16 }
+    enum: { 0: analog_output, 1: modbus }
+    default: analog_output
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  extract_fan_analog_output_type:
+    title: "Extract Fan Analog Output Type"
+    binding: { holding: 132, type: uint16 }
+    enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
+    default: v0_10
+    present_when: extract_fan_control_source == analog_output
+
+  extract_fan_minimum_output_value:
+    title: "Extract Fan Minimum Output Value"
+    binding: { holding: 133, type: uint16 }
+    unit: "%"
+    range: [20, 60]
+    default: 30
+
+  extract_fan_maximum_output_value:
+    title: "Extract Fan Maximum Output Value"
+    binding: { holding: 134, type: uint16 }
+    unit: "%"
+    range: [60, 100]
+    default: 100
+
+  extract_fan_start_output_value:
+    title: "Extract Fan Start Output Value"
+    binding: { holding: 135, type: uint16 }
+    unit: "%"
+    range: [20, 100]
+    default: 50
+
+  extract_fan_kickstart_control:
+    title: "Extract Fan Kickstart Control"
+    binding: { holding: 136, type: uint16 }
+    enum: { 0: softstart, 1: kickstart }
+    default: softstart
+
+  extract_fan_kickstart_time:
+    title: "Extract Fan Kickstart Time"
+    binding: { holding: 137, type: uint16 }
+    unit: "seconds"
+    range: [2, 10]
+    default: 5
+    present_when: extract_fan_kickstart_control == kickstart
+
+  extract_fan_modbus_slave_address:
+    title: "Extract Fan Modbus Slave Address"
+    binding: { holding: 138, type: uint16 }
+    range: [1, 247]
+    default: 1
+    present_when: extract_fan_control_source == modbus
+
+  extract_fan_modbus_speed_register:
+    title: "Extract Fan Modbus Speed Register"
+    binding: { holding: 139, type: uint16 }
+    range: [1, 65535]
+    present_when: extract_fan_control_source == modbus
+
+  extract_fan_overwrite_enable:
+    title: "Extract Fan Overwrite Enable"
+    binding: { holding: 140, type: uint16 }
+    enum: { 0: automatic, 1: overwrite }
+    default: automatic
+    on_write:
+      reread: dependents
+
+  extract_fan_overwrite_value:
+    title: "Extract Fan Overwrite Value"
+    binding: { holding: 141, type: uint16 }
+    unit: "%"
+    range: [0, 100]
+    default: 50
+    present_when: extract_fan_overwrite_enable == overwrite
+
+  extract_digital_input_function:
+    title: "Extract Digital Input Function"
+    binding: { holding: 146, type: uint16 }
+    enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
+    default: disabled
+    on_write:
+      reread: dependents
+
+  extract_digital_input_polarity:
+    title: "Extract Digital Input Polarity"
+    binding: { holding: 147, type: uint16 }
+    enum: { 0: normally_open, 1: normally_closed }
+    default: normally_open
+    present_when: extract_digital_input_function != disabled
+
+  extract_fan_output_value:
+    title: "Extract Fan Output Value"
+    binding: { input: 131, type: uint16 }
+    access: read_only
+    unit: "%"
+    range: [0, 100]
+
+  extract_fan_speed:
+    title: "Extract Fan Speed"
+    binding: { input: 132, type: uint16 }
+    access: read_only
+    unit: "rpm"
+    range: [0, 5000]
+
+  extract_fan_state:
+    title: "Extract Fan State"
+    binding: { input: 133, type: uint16 }
+    access: read_only
+    flags:
+      0: fan_fault
+      1: tacho_missing
+      2: modbus_timeout
+      3: blocked_rotor
+
+  extract_digital_input_state:
+    title: "Extract Digital Input State"
+    binding: { input: 134, type: uint16 }
+    access: read_only
+    enum: { 0: low, 1: high }
+    valid_when: extract_digital_input_function != disabled
+
+  # ---------------------------------------------------------------------
+  # Supply chain, I2C sensor channel 1
+  # ---------------------------------------------------------------------
+
+  supply_ch1_sensor_capability:
+    title: "Supply Channel 1 - Sensor Capability"
+    binding: { input: 201, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  supply_ch1_sensor_state:
+    title: "Supply Channel 1 - Sensor State"
+    binding: { input: 202, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  supply_ch1_alerts:
+    title: "Supply Channel 1 - Alerts"
+    binding: { input: 203, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: supply_ch1_enable == enabled
+
+  supply_ch1_temperature_level:
+    title: "Supply Channel 1 - Temperature Level"
+    binding: { input: 204, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: supply_ch1_sensor_capability contains temperature
+    valid_when: supply_ch1_enable == enabled and supply_ch1_sensor_state not contains sensor_problem
+
+  supply_ch1_relative_humidity_level:
+    title: "Supply Channel 1 - Relative Humidity Level"
+    binding: { input: 205, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: supply_ch1_sensor_capability contains relative_humidity
+    valid_when: supply_ch1_enable == enabled and supply_ch1_sensor_state not contains sensor_problem
+
+  supply_ch1_voc_level:
+    title: "Supply Channel 1 - VOC Level"
+    binding: { input: 206, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: supply_ch1_sensor_capability contains voc
+    valid_when: supply_ch1_enable == enabled and supply_ch1_sensor_state not contains sensor_problem
+
+  supply_ch1_carbon_dioxide_level:
+    title: "Supply Channel 1 - Carbon Dioxide Level"
+    binding: { input: 207, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: supply_ch1_sensor_capability contains carbon_dioxide
+    valid_when: supply_ch1_enable == enabled and supply_ch1_sensor_state not contains sensor_problem
+
+  supply_ch1_barometric_pressure_level:
+    title: "Supply Channel 1 - Barometric Pressure Level"
+    binding: { input: 208, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: supply_ch1_sensor_capability contains barometric_pressure
+    valid_when: supply_ch1_enable == enabled and supply_ch1_sensor_state not contains sensor_problem
+
+  supply_ch1_enable:
+    title: "Supply Channel 1 - Channel Enable"
+    binding: { holding: 201, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  supply_ch1_temperature_correction:
+    title: "Supply Channel 1 - Temperature Correction Value"
+    binding: { holding: 202, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: supply_ch1_sensor_capability contains temperature
+
+  supply_ch1_relative_humidity_correction:
+    title: "Supply Channel 1 - Relative Humidity Correction Value"
+    binding: { holding: 203, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch1_sensor_capability contains relative_humidity
+
+  supply_ch1_voc_correction:
+    title: "Supply Channel 1 - VOC Correction Value"
+    binding: { holding: 204, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: supply_ch1_sensor_capability contains voc
+
+  supply_ch1_carbon_dioxide_correction:
+    title: "Supply Channel 1 - Carbon Dioxide Correction Value"
+    binding: { holding: 205, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: supply_ch1_sensor_capability contains carbon_dioxide
+
+  supply_ch1_barometric_pressure_correction:
+    title: "Supply Channel 1 - Barometric Pressure Correction Value"
+    binding: { holding: 206, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch1_sensor_capability contains barometric_pressure
+
+  supply_ch1_carbon_dioxide_alert_1_level:
+    title: "Supply Channel 1 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 211, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: supply_ch1_sensor_capability contains carbon_dioxide
+
+  supply_ch1_carbon_dioxide_alert_2_level:
+    title: "Supply Channel 1 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 212, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: supply_ch1_sensor_capability contains carbon_dioxide
+
+  supply_ch1_voc_alert_1_level:
+    title: "Supply Channel 1 - VOC Alert 1 Level"
+    binding: { holding: 213, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: supply_ch1_sensor_capability contains voc
+
+  supply_ch1_voc_alert_2_level:
+    title: "Supply Channel 1 - VOC Alert 2 Level"
+    binding: { holding: 214, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: supply_ch1_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Supply chain, I2C sensor channel 2
+  # ---------------------------------------------------------------------
+
+  supply_ch2_sensor_capability:
+    title: "Supply Channel 2 - Sensor Capability"
+    binding: { input: 221, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  supply_ch2_sensor_state:
+    title: "Supply Channel 2 - Sensor State"
+    binding: { input: 222, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  supply_ch2_alerts:
+    title: "Supply Channel 2 - Alerts"
+    binding: { input: 223, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: supply_ch2_enable == enabled
+
+  supply_ch2_temperature_level:
+    title: "Supply Channel 2 - Temperature Level"
+    binding: { input: 224, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: supply_ch2_sensor_capability contains temperature
+    valid_when: supply_ch2_enable == enabled and supply_ch2_sensor_state not contains sensor_problem
+
+  supply_ch2_relative_humidity_level:
+    title: "Supply Channel 2 - Relative Humidity Level"
+    binding: { input: 225, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: supply_ch2_sensor_capability contains relative_humidity
+    valid_when: supply_ch2_enable == enabled and supply_ch2_sensor_state not contains sensor_problem
+
+  supply_ch2_voc_level:
+    title: "Supply Channel 2 - VOC Level"
+    binding: { input: 226, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: supply_ch2_sensor_capability contains voc
+    valid_when: supply_ch2_enable == enabled and supply_ch2_sensor_state not contains sensor_problem
+
+  supply_ch2_carbon_dioxide_level:
+    title: "Supply Channel 2 - Carbon Dioxide Level"
+    binding: { input: 227, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: supply_ch2_sensor_capability contains carbon_dioxide
+    valid_when: supply_ch2_enable == enabled and supply_ch2_sensor_state not contains sensor_problem
+
+  supply_ch2_barometric_pressure_level:
+    title: "Supply Channel 2 - Barometric Pressure Level"
+    binding: { input: 228, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: supply_ch2_sensor_capability contains barometric_pressure
+    valid_when: supply_ch2_enable == enabled and supply_ch2_sensor_state not contains sensor_problem
+
+  supply_ch2_enable:
+    title: "Supply Channel 2 - Channel Enable"
+    binding: { holding: 221, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  supply_ch2_temperature_correction:
+    title: "Supply Channel 2 - Temperature Correction Value"
+    binding: { holding: 222, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: supply_ch2_sensor_capability contains temperature
+
+  supply_ch2_relative_humidity_correction:
+    title: "Supply Channel 2 - Relative Humidity Correction Value"
+    binding: { holding: 223, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch2_sensor_capability contains relative_humidity
+
+  supply_ch2_voc_correction:
+    title: "Supply Channel 2 - VOC Correction Value"
+    binding: { holding: 224, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: supply_ch2_sensor_capability contains voc
+
+  supply_ch2_carbon_dioxide_correction:
+    title: "Supply Channel 2 - Carbon Dioxide Correction Value"
+    binding: { holding: 225, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: supply_ch2_sensor_capability contains carbon_dioxide
+
+  supply_ch2_barometric_pressure_correction:
+    title: "Supply Channel 2 - Barometric Pressure Correction Value"
+    binding: { holding: 226, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch2_sensor_capability contains barometric_pressure
+
+  supply_ch2_carbon_dioxide_alert_1_level:
+    title: "Supply Channel 2 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 231, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: supply_ch2_sensor_capability contains carbon_dioxide
+
+  supply_ch2_carbon_dioxide_alert_2_level:
+    title: "Supply Channel 2 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 232, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: supply_ch2_sensor_capability contains carbon_dioxide
+
+  supply_ch2_voc_alert_1_level:
+    title: "Supply Channel 2 - VOC Alert 1 Level"
+    binding: { holding: 233, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: supply_ch2_sensor_capability contains voc
+
+  supply_ch2_voc_alert_2_level:
+    title: "Supply Channel 2 - VOC Alert 2 Level"
+    binding: { holding: 234, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: supply_ch2_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Supply chain, I2C sensor channel 3
+  # ---------------------------------------------------------------------
+
+  supply_ch3_sensor_capability:
+    title: "Supply Channel 3 - Sensor Capability"
+    binding: { input: 241, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  supply_ch3_sensor_state:
+    title: "Supply Channel 3 - Sensor State"
+    binding: { input: 242, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  supply_ch3_alerts:
+    title: "Supply Channel 3 - Alerts"
+    binding: { input: 243, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: supply_ch3_enable == enabled
+
+  supply_ch3_temperature_level:
+    title: "Supply Channel 3 - Temperature Level"
+    binding: { input: 244, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: supply_ch3_sensor_capability contains temperature
+    valid_when: supply_ch3_enable == enabled and supply_ch3_sensor_state not contains sensor_problem
+
+  supply_ch3_relative_humidity_level:
+    title: "Supply Channel 3 - Relative Humidity Level"
+    binding: { input: 245, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: supply_ch3_sensor_capability contains relative_humidity
+    valid_when: supply_ch3_enable == enabled and supply_ch3_sensor_state not contains sensor_problem
+
+  supply_ch3_voc_level:
+    title: "Supply Channel 3 - VOC Level"
+    binding: { input: 246, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: supply_ch3_sensor_capability contains voc
+    valid_when: supply_ch3_enable == enabled and supply_ch3_sensor_state not contains sensor_problem
+
+  supply_ch3_carbon_dioxide_level:
+    title: "Supply Channel 3 - Carbon Dioxide Level"
+    binding: { input: 247, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: supply_ch3_sensor_capability contains carbon_dioxide
+    valid_when: supply_ch3_enable == enabled and supply_ch3_sensor_state not contains sensor_problem
+
+  supply_ch3_barometric_pressure_level:
+    title: "Supply Channel 3 - Barometric Pressure Level"
+    binding: { input: 248, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: supply_ch3_sensor_capability contains barometric_pressure
+    valid_when: supply_ch3_enable == enabled and supply_ch3_sensor_state not contains sensor_problem
+
+  supply_ch3_enable:
+    title: "Supply Channel 3 - Channel Enable"
+    binding: { holding: 241, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  supply_ch3_temperature_correction:
+    title: "Supply Channel 3 - Temperature Correction Value"
+    binding: { holding: 242, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: supply_ch3_sensor_capability contains temperature
+
+  supply_ch3_relative_humidity_correction:
+    title: "Supply Channel 3 - Relative Humidity Correction Value"
+    binding: { holding: 243, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch3_sensor_capability contains relative_humidity
+
+  supply_ch3_voc_correction:
+    title: "Supply Channel 3 - VOC Correction Value"
+    binding: { holding: 244, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: supply_ch3_sensor_capability contains voc
+
+  supply_ch3_carbon_dioxide_correction:
+    title: "Supply Channel 3 - Carbon Dioxide Correction Value"
+    binding: { holding: 245, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: supply_ch3_sensor_capability contains carbon_dioxide
+
+  supply_ch3_barometric_pressure_correction:
+    title: "Supply Channel 3 - Barometric Pressure Correction Value"
+    binding: { holding: 246, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: supply_ch3_sensor_capability contains barometric_pressure
+
+  supply_ch3_carbon_dioxide_alert_1_level:
+    title: "Supply Channel 3 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 251, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: supply_ch3_sensor_capability contains carbon_dioxide
+
+  supply_ch3_carbon_dioxide_alert_2_level:
+    title: "Supply Channel 3 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 252, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: supply_ch3_sensor_capability contains carbon_dioxide
+
+  supply_ch3_voc_alert_1_level:
+    title: "Supply Channel 3 - VOC Alert 1 Level"
+    binding: { holding: 253, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: supply_ch3_sensor_capability contains voc
+
+  supply_ch3_voc_alert_2_level:
+    title: "Supply Channel 3 - VOC Alert 2 Level"
+    binding: { holding: 254, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: supply_ch3_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Extract chain, I2C sensor channel 1
+  # ---------------------------------------------------------------------
+
+  extract_ch1_sensor_capability:
+    title: "Extract Channel 1 - Sensor Capability"
+    binding: { input: 261, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  extract_ch1_sensor_state:
+    title: "Extract Channel 1 - Sensor State"
+    binding: { input: 262, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  extract_ch1_alerts:
+    title: "Extract Channel 1 - Alerts"
+    binding: { input: 263, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: extract_ch1_enable == enabled
+
+  extract_ch1_temperature_level:
+    title: "Extract Channel 1 - Temperature Level"
+    binding: { input: 264, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: extract_ch1_sensor_capability contains temperature
+    valid_when: extract_ch1_enable == enabled and extract_ch1_sensor_state not contains sensor_problem
+
+  extract_ch1_relative_humidity_level:
+    title: "Extract Channel 1 - Relative Humidity Level"
+    binding: { input: 265, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: extract_ch1_sensor_capability contains relative_humidity
+    valid_when: extract_ch1_enable == enabled and extract_ch1_sensor_state not contains sensor_problem
+
+  extract_ch1_voc_level:
+    title: "Extract Channel 1 - VOC Level"
+    binding: { input: 266, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: extract_ch1_sensor_capability contains voc
+    valid_when: extract_ch1_enable == enabled and extract_ch1_sensor_state not contains sensor_problem
+
+  extract_ch1_carbon_dioxide_level:
+    title: "Extract Channel 1 - Carbon Dioxide Level"
+    binding: { input: 267, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: extract_ch1_sensor_capability contains carbon_dioxide
+    valid_when: extract_ch1_enable == enabled and extract_ch1_sensor_state not contains sensor_problem
+
+  extract_ch1_barometric_pressure_level:
+    title: "Extract Channel 1 - Barometric Pressure Level"
+    binding: { input: 268, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: extract_ch1_sensor_capability contains barometric_pressure
+    valid_when: extract_ch1_enable == enabled and extract_ch1_sensor_state not contains sensor_problem
+
+  extract_ch1_enable:
+    title: "Extract Channel 1 - Channel Enable"
+    binding: { holding: 261, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  extract_ch1_temperature_correction:
+    title: "Extract Channel 1 - Temperature Correction Value"
+    binding: { holding: 262, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: extract_ch1_sensor_capability contains temperature
+
+  extract_ch1_relative_humidity_correction:
+    title: "Extract Channel 1 - Relative Humidity Correction Value"
+    binding: { holding: 263, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch1_sensor_capability contains relative_humidity
+
+  extract_ch1_voc_correction:
+    title: "Extract Channel 1 - VOC Correction Value"
+    binding: { holding: 264, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: extract_ch1_sensor_capability contains voc
+
+  extract_ch1_carbon_dioxide_correction:
+    title: "Extract Channel 1 - Carbon Dioxide Correction Value"
+    binding: { holding: 265, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: extract_ch1_sensor_capability contains carbon_dioxide
+
+  extract_ch1_barometric_pressure_correction:
+    title: "Extract Channel 1 - Barometric Pressure Correction Value"
+    binding: { holding: 266, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch1_sensor_capability contains barometric_pressure
+
+  extract_ch1_carbon_dioxide_alert_1_level:
+    title: "Extract Channel 1 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 271, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: extract_ch1_sensor_capability contains carbon_dioxide
+
+  extract_ch1_carbon_dioxide_alert_2_level:
+    title: "Extract Channel 1 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 272, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: extract_ch1_sensor_capability contains carbon_dioxide
+
+  extract_ch1_voc_alert_1_level:
+    title: "Extract Channel 1 - VOC Alert 1 Level"
+    binding: { holding: 273, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: extract_ch1_sensor_capability contains voc
+
+  extract_ch1_voc_alert_2_level:
+    title: "Extract Channel 1 - VOC Alert 2 Level"
+    binding: { holding: 274, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: extract_ch1_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Extract chain, I2C sensor channel 2
+  # ---------------------------------------------------------------------
+
+  extract_ch2_sensor_capability:
+    title: "Extract Channel 2 - Sensor Capability"
+    binding: { input: 281, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  extract_ch2_sensor_state:
+    title: "Extract Channel 2 - Sensor State"
+    binding: { input: 282, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  extract_ch2_alerts:
+    title: "Extract Channel 2 - Alerts"
+    binding: { input: 283, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: extract_ch2_enable == enabled
+
+  extract_ch2_temperature_level:
+    title: "Extract Channel 2 - Temperature Level"
+    binding: { input: 284, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: extract_ch2_sensor_capability contains temperature
+    valid_when: extract_ch2_enable == enabled and extract_ch2_sensor_state not contains sensor_problem
+
+  extract_ch2_relative_humidity_level:
+    title: "Extract Channel 2 - Relative Humidity Level"
+    binding: { input: 285, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: extract_ch2_sensor_capability contains relative_humidity
+    valid_when: extract_ch2_enable == enabled and extract_ch2_sensor_state not contains sensor_problem
+
+  extract_ch2_voc_level:
+    title: "Extract Channel 2 - VOC Level"
+    binding: { input: 286, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: extract_ch2_sensor_capability contains voc
+    valid_when: extract_ch2_enable == enabled and extract_ch2_sensor_state not contains sensor_problem
+
+  extract_ch2_carbon_dioxide_level:
+    title: "Extract Channel 2 - Carbon Dioxide Level"
+    binding: { input: 287, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: extract_ch2_sensor_capability contains carbon_dioxide
+    valid_when: extract_ch2_enable == enabled and extract_ch2_sensor_state not contains sensor_problem
+
+  extract_ch2_barometric_pressure_level:
+    title: "Extract Channel 2 - Barometric Pressure Level"
+    binding: { input: 288, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: extract_ch2_sensor_capability contains barometric_pressure
+    valid_when: extract_ch2_enable == enabled and extract_ch2_sensor_state not contains sensor_problem
+
+  extract_ch2_enable:
+    title: "Extract Channel 2 - Channel Enable"
+    binding: { holding: 281, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  extract_ch2_temperature_correction:
+    title: "Extract Channel 2 - Temperature Correction Value"
+    binding: { holding: 282, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: extract_ch2_sensor_capability contains temperature
+
+  extract_ch2_relative_humidity_correction:
+    title: "Extract Channel 2 - Relative Humidity Correction Value"
+    binding: { holding: 283, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch2_sensor_capability contains relative_humidity
+
+  extract_ch2_voc_correction:
+    title: "Extract Channel 2 - VOC Correction Value"
+    binding: { holding: 284, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: extract_ch2_sensor_capability contains voc
+
+  extract_ch2_carbon_dioxide_correction:
+    title: "Extract Channel 2 - Carbon Dioxide Correction Value"
+    binding: { holding: 285, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: extract_ch2_sensor_capability contains carbon_dioxide
+
+  extract_ch2_barometric_pressure_correction:
+    title: "Extract Channel 2 - Barometric Pressure Correction Value"
+    binding: { holding: 286, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch2_sensor_capability contains barometric_pressure
+
+  extract_ch2_carbon_dioxide_alert_1_level:
+    title: "Extract Channel 2 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 291, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: extract_ch2_sensor_capability contains carbon_dioxide
+
+  extract_ch2_carbon_dioxide_alert_2_level:
+    title: "Extract Channel 2 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 292, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: extract_ch2_sensor_capability contains carbon_dioxide
+
+  extract_ch2_voc_alert_1_level:
+    title: "Extract Channel 2 - VOC Alert 1 Level"
+    binding: { holding: 293, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: extract_ch2_sensor_capability contains voc
+
+  extract_ch2_voc_alert_2_level:
+    title: "Extract Channel 2 - VOC Alert 2 Level"
+    binding: { holding: 294, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: extract_ch2_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Extract chain, I2C sensor channel 3
+  # ---------------------------------------------------------------------
+
+  extract_ch3_sensor_capability:
+    title: "Extract Channel 3 - Sensor Capability"
+    binding: { input: 301, type: uint16 }
+    access: read_only
+    # A channel may carry several measurands at once, so this is a bit
+    # field discovered at startup, not an enum.
+    flags:
+      0: temperature
+      1: relative_humidity
+      2: voc
+      3: carbon_dioxide
+      4: barometric_pressure
+
+  extract_ch3_sensor_state:
+    title: "Extract Channel 3 - Sensor State"
+    binding: { input: 302, type: uint16 }
+    access: read_only
+    flags:
+      0: sensor_problem
+      1: sensor_replacement
+      2: sensor_preheating
+      3: not_connected
+
+  extract_ch3_alerts:
+    title: "Extract Channel 3 - Alerts"
+    binding: { input: 303, type: uint16 }
+    access: read_only
+    enum: { 0: ok, 1: yellow_alert, 2: red_alert }
+    valid_when: extract_ch3_enable == enabled
+
+  extract_ch3_temperature_level:
+    title: "Extract Channel 3 - Temperature Level"
+    binding: { input: 304, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-40.0, 80.0]
+    present_when: extract_ch3_sensor_capability contains temperature
+    valid_when: extract_ch3_enable == enabled and extract_ch3_sensor_state not contains sensor_problem
+
+  extract_ch3_relative_humidity_level:
+    title: "Extract Channel 3 - Relative Humidity Level"
+    binding: { input: 305, type: uint16 }
+    access: read_only
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [0.0, 100.0]
+    present_when: extract_ch3_sensor_capability contains relative_humidity
+    valid_when: extract_ch3_enable == enabled and extract_ch3_sensor_state not contains sensor_problem
+
+  extract_ch3_voc_level:
+    title: "Extract Channel 3 - VOC Level"
+    binding: { input: 306, type: uint16 }
+    access: read_only
+    unit: "index"
+    decimals: 0
+    range: [0, 500]
+    present_when: extract_ch3_sensor_capability contains voc
+    valid_when: extract_ch3_enable == enabled and extract_ch3_sensor_state not contains sensor_problem
+
+  extract_ch3_carbon_dioxide_level:
+    title: "Extract Channel 3 - Carbon Dioxide Level"
+    binding: { input: 307, type: uint16 }
+    access: read_only
+    unit: "ppm"
+    decimals: 0
+    range: [0, 5000]
+    present_when: extract_ch3_sensor_capability contains carbon_dioxide
+    valid_when: extract_ch3_enable == enabled and extract_ch3_sensor_state not contains sensor_problem
+
+  extract_ch3_barometric_pressure_level:
+    title: "Extract Channel 3 - Barometric Pressure Level"
+    binding: { input: 308, type: uint16 }
+    access: read_only
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [300.0, 1100.0]
+    present_when: extract_ch3_sensor_capability contains barometric_pressure
+    valid_when: extract_ch3_enable == enabled and extract_ch3_sensor_state not contains sensor_problem
+
+  extract_ch3_enable:
+    title: "Extract Channel 3 - Channel Enable"
+    binding: { holding: 301, type: uint16 }
+    enum: { 0: disabled, 1: enabled }
+    default: enabled
+    on_write:
+      reread: dependents
+      settle_ms: 500
+
+  extract_ch3_temperature_correction:
+    title: "Extract Channel 3 - Temperature Correction Value"
+    binding: { holding: 302, type: int16 }
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+    range: [-5.0, 5.0]
+    default: 0
+    present_when: extract_ch3_sensor_capability contains temperature
+
+  extract_ch3_relative_humidity_correction:
+    title: "Extract Channel 3 - Relative Humidity Correction Value"
+    binding: { holding: 303, type: int16 }
+    unit: "%RH"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch3_sensor_capability contains relative_humidity
+
+  extract_ch3_voc_correction:
+    title: "Extract Channel 3 - VOC Correction Value"
+    binding: { holding: 304, type: int16 }
+    unit: "index"
+    decimals: 0
+    range: [-50, 50]
+    default: 0
+    present_when: extract_ch3_sensor_capability contains voc
+
+  extract_ch3_carbon_dioxide_correction:
+    title: "Extract Channel 3 - Carbon Dioxide Correction Value"
+    binding: { holding: 305, type: int16 }
+    unit: "ppm"
+    decimals: 0
+    range: [-200, 200]
+    default: 0
+    present_when: extract_ch3_sensor_capability contains carbon_dioxide
+
+  extract_ch3_barometric_pressure_correction:
+    title: "Extract Channel 3 - Barometric Pressure Correction Value"
+    binding: { holding: 306, type: int16 }
+    unit: "hPa"
+    scale: 0.1
+    decimals: 1
+    range: [-10.0, 10.0]
+    default: 0
+    present_when: extract_ch3_sensor_capability contains barometric_pressure
+
+  extract_ch3_carbon_dioxide_alert_1_level:
+    title: "Extract Channel 3 - Carbon Dioxide Alert 1 Level"
+    binding: { holding: 311, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1000
+    present_when: extract_ch3_sensor_capability contains carbon_dioxide
+
+  extract_ch3_carbon_dioxide_alert_2_level:
+    title: "Extract Channel 3 - Carbon Dioxide Alert 2 Level"
+    binding: { holding: 312, type: uint16 }
+    unit: "ppm"
+    range: [400, 5000]
+    default: 1400
+    present_when: extract_ch3_sensor_capability contains carbon_dioxide
+
+  extract_ch3_voc_alert_1_level:
+    title: "Extract Channel 3 - VOC Alert 1 Level"
+    binding: { holding: 313, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 150
+    present_when: extract_ch3_sensor_capability contains voc
+
+  extract_ch3_voc_alert_2_level:
+    title: "Extract Channel 3 - VOC Alert 2 Level"
+    binding: { holding: 314, type: uint16 }
+    unit: "index"
+    range: [0, 500]
+    default: 300
+    present_when: extract_ch3_sensor_capability contains voc
+
+  # ---------------------------------------------------------------------
+  # Diagnostics (IR501+ in the library convention)
+  # ---------------------------------------------------------------------
+
+  mcu_temperature:
+    title: "MCU Temperature"
+    binding: { input: 501, type: int16 }
+    access: read_only
+    unit: "°C"
+    scale: 0.1
+    decimals: 1
+
+  lifetime_days:
+    title: "Lifetime - days"
+    binding: { input: 504, type: uint16 }
+    access: read_only
+    unit: "days"
+
+  lifetime_minutes:
+    title: "Lifetime - minutes"
+    binding: { input: 505, type: uint16 }
+    access: read_only
+    unit: "minutes"
+
+  internal_voltage_12v:
+    title: "Internal voltage - 12VDC"
+    binding: { input: 506, type: uint16 }
+    access: read_only
+    unit: "VDC"
+    scale: 0.1
+    decimals: 1
+
+  internal_voltage_3v3:
+    title: "Internal voltage - 3.3VDC"
+    binding: { input: 507, type: uint16 }
+    access: read_only
+    unit: "VDC"
+    scale: 0.01
+    decimals: 2
+
+  device_reset:
+    title: "Device Reset"
+    binding: { holding: 990, type: uint16 }
+    access: write_only
+    enum: { 0: idle, 1: reset }
+    default: idle
 
 procedures:
-  set_gas_type:
-    title: "Change gas type"
-    danger: high
-    confirm: "Changes alarm thresholds. Detector will not alarm during calibration mode."
-    preconditions:
-      - device_mode == idle
-      # UNREPRESENTABLE under D5: no channel dimension, so there is no
-      # channel[*] to quantify over. Rewrite as an explicit disjunction over
-      # the real per-channel alarm_active signals once they are declared.
-      - "not any(channel[*].alarm_active)"
-    steps:
-      - write: { binding: unlock, value: 0x00A5 }
-      - write: { signal: gas_type, value: $param.gas }
-        verify: { read: gas_type, equals: $param.gas, timeout_ms: 500 }
-      - reread: [alarm_level_1, alarm_level_2]     # device may clamp them
-      - write: { binding: unlock, value: 0x0000 }
-    on_failure:
-      - write: { binding: unlock, value: 0x0000 }  # always relock
-    params:
-      gas: { enum_from: gas_type }
 
-  zero_calibrate:
-    title: "Zero calibration"
+  swap_air_chains:
+    title: "Swap air chains left to right"
     danger: high
-    duration_ms: 60000
+    confirm: "Both fans stop and the unit reverses which physical side is
+      supply and which is extract. Ducting, sensors and the digital inputs
+      must be re-checked against the new orientation before restarting."
+    duration_ms: 5000
+    preconditions:
+      - operating_mode == standby
+      - supply_fan_speed == 0
+      - extract_fan_speed == 0
     steps:
-      - write: { binding: cmd, value: 0x0001 }
-      - await: { signal: cal_status, equals: complete,
-                 timeout_ms: 90000, poll_ms: 1000 }
+      - write: { signal: left_right_swap, value: $param.orientation }
+        verify:
+          read: left_right_swap
+          equals: $param.orientation
+          timeout_ms: 2000
+      - delay_ms: 1000
+      - reread: [supply_digital_input_state, extract_digital_input_state]
+    on_failure:
+      - write: { signal: operating_mode, value: standby }
     outcome:
-      success: { signal: cal_status, equals: complete }
-      failure: { signal: cal_status, in: [failed, aborted] }
+      failure: { signal: device_status_errors, contains: sensor_bus_fault }
+    params:
+      orientation: { enum_from: left_right_swap }
+
+  set_fan_control_source:
+    title: "Change fan control source"
+    danger: high
+    confirm: "The fan stops while the control path changes. An EC fan left on
+      the wrong path will not run at all."
+    duration_ms: 3000
+    preconditions:
+      - operating_mode == standby
+    steps:
+      - write: { signal: supply_fan_control_source, value: $param.source }
+        verify:
+          read: supply_fan_control_source
+          equals: $param.source
+          timeout_ms: 1000
+      - write: { signal: extract_fan_control_source, value: $param.source }
+        verify:
+          read: extract_fan_control_source
+          equals: $param.source
+          timeout_ms: 1000
+      - delay_ms: 500
+    params:
+      source: { enum_from: supply_fan_control_source }
+
+  rescan_sensor_channels:
+    title: "Rescan I2C sensor channels"
+    danger: medium
+    confirm: "Sensor readings are unavailable during the scan. Channels that
+      have been physically removed lose their configuration."
+    duration_ms: 10000
+    steps:
+      - write: { signal: sensor_bus_rescan, value: rescan }
+      - await:
+          signal: sensor_bus_state
+          in: [complete, failed]
+          timeout_ms: 15000
+          poll_ms: 500
+      - reread:
+          - supply_ch1_sensor_capability
+          - supply_ch2_sensor_capability
+          - supply_ch3_sensor_capability
+          - extract_ch1_sensor_capability
+          - extract_ch2_sensor_capability
+          - extract_ch3_sensor_capability
+    outcome:
+      success: { signal: sensor_bus_state, equals: complete }
+      failure: { signal: sensor_bus_state, equals: failed }
+
+  commission_fan_limits:
+    title: "Set fan output limits"
+    danger: medium
+    confirm: "Minimum output below the fan's stall threshold will stall it
+      instead of running it slowly."
+    preconditions:
+      - operating_mode == standby
+    steps:
+      - write: { signal: supply_fan_minimum_output_value, value: $param.minimum }
+      - write: { signal: supply_fan_maximum_output_value, value: $param.maximum }
+      - write: { signal: extract_fan_minimum_output_value, value: $param.minimum }
+      - write: { signal: extract_fan_maximum_output_value, value: $param.maximum }
+    params:
+      minimum: { type: uint16, range: [20, 60], default: 30, title: "Minimum output" }
+      maximum: { type: uint16, range: [60, 100], default: 100, title: "Maximum output" }

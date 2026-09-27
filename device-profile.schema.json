@@ -5,24 +5,25 @@
   "description": "Shape of a device profile. This schema validates structure and vocabulary only. It cannot check that a signal reference resolves, that an enum member exists, or that an expression parses -- see validate.py for that layer, and DECISIONS.md D1 for why expressions became load-bearing.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["signals"],
+  "required": ["device", "signals"],
   "properties": {
-    "access": { "$ref": "#/$defs/access" },
-    "registers": {
-      "description": "Named raw registers that are not signals: locks, command words, scratch. Referenced from procedure steps as a binding name. PROVISIONAL -- introduced because procedures already write to binding unlock and binding cmd with nothing declaring them.",
+    "device": {
+      "description": "Which device and firmware this profile describes. One profile is one firmware version's register map, as in the company device library.",
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/identifier" },
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["binding"],
-        "properties": {
-          "binding": { "$ref": "#/$defs/binding" },
-          "title": { "type": "string" },
-          "description": { "type": "string" }
-        }
+      "additionalProperties": false,
+      "required": ["name", "type", "firmware_version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "type": { "type": "integer", "description": "Device series identifier, as reported by the device_type register." },
+        "firmware_version": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9]\\d{0,2})\\.(?:0|[1-9]\\d{0,2})(?:\\.(?:0|[1-9]\\d{0,2}))?$"
+        },
+        "image": { "type": "string" }
       }
     },
+    "access": { "$ref": "#/$defs/access" },
     "signals": {
       "type": "object",
       "minProperties": 1,
@@ -79,9 +80,17 @@
 
     "enum_map": {
       "type": "object",
-      "description": "Raw register value -> member name.",
+      "description": "Raw register value -> member name. Mutually exclusive states.",
       "minProperties": 1,
       "propertyNames": { "pattern": "^(0|[1-9][0-9]*|0x[0-9a-fA-F]+)$" },
+      "additionalProperties": { "$ref": "#/$defs/enum_member" }
+    },
+
+    "flag_map": {
+      "type": "object",
+      "description": "Bit index -> member name, for a register where several members can be true at once. Distinct from enum because the device genuinely reports combinations: a sensor channel carrying both temperature and humidity, a status word with two faults raised. Tested with 'contains' / 'not contains' rather than '=='.",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^(0|[1-9]|1[0-5])$" },
       "additionalProperties": { "$ref": "#/$defs/enum_member" }
     },
 
@@ -158,7 +167,12 @@
         "offset": { "type": "number" },
         "range": { "$ref": "#/$defs/range" },
         "step": { "type": "number", "exclusiveMinimum": 0 },
-        "enum": { "$ref": "#/$defs/enum_map" }
+        "decimals": {
+          "type": "integer", "minimum": 0, "maximum": 6,
+          "description": "Decimal places to show. Display only -- scale already fixes the value."
+        },
+        "enum": { "$ref": "#/$defs/enum_map" },
+        "flags": { "$ref": "#/$defs/flag_map" }
       }
     },
 
@@ -178,10 +192,15 @@
                 { "required": ["scale"] },
                 { "required": ["offset"] },
                 { "required": ["range"] },
-                { "required": ["enum"] }
+                { "required": ["enum"] },
+                { "required": ["flags"] }
               ]
             }
           }
+        },
+        {
+          "description": "A register is either a set of mutually exclusive states or a set of independent bits, never both.",
+          "not": { "required": ["enum", "flags"] }
         }
       ],
       "properties": {
@@ -189,8 +208,17 @@
         "title": { "type": "string" },
         "description": { "type": "string" },
         "access": {
-          "description": "Privilege required to write. Absent means freely writable if the binding allows it. PROVISIONAL -- this ladder is invented, not derived from the source profile.",
-          "enum": ["user", "commissioning", "factory"]
+          "description": "Access rights, following the company device library. Absent means read_write.",
+          "enum": ["read_only", "write_only", "read_write"],
+          "default": "read_write"
+        },
+        "hidden": {
+          "type": "boolean", "default": false,
+          "description": "Service register: real, documented here, not shown to an ordinary user."
+        },
+        "default": {
+          "description": "Factory default, in engineering units or as an enum member. Where the default depends on configuration, put it in constraints instead.",
+          "type": ["number", "string", "boolean"]
         },
 
         "unit": true,
@@ -198,7 +226,9 @@
         "offset": true,
         "range": true,
         "step": true,
+        "decimals": true,
         "enum": true,
+        "flags": true,
 
         "present_when": { "$ref": "#/$defs/expression" },
         "valid_when": { "$ref": "#/$defs/expression" },
@@ -220,7 +250,9 @@
               "offset": true,
               "range": true,
               "step": true,
-              "enum": true
+              "decimals": true,
+              "enum": true,
+              "flags": true
             }
           }
         },
@@ -272,21 +304,18 @@
     "condition": {
       "type": "object",
       "required": ["signal"],
-      "oneOf": [{ "required": ["equals"] }, { "required": ["in"] }],
+      "oneOf": [
+        { "required": ["equals"] },
+        { "required": ["in"] },
+        { "required": ["contains"] },
+        { "required": ["not_contains"] }
+      ],
       "properties": {
         "signal": { "$ref": "#/$defs/signal_ref" },
         "equals": { "$ref": "#/$defs/value" },
-        "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } }
-      }
-    },
-
-    "target": {
-      "description": "A step operates on a named signal or on a named raw register, never both.",
-      "type": "object",
-      "oneOf": [{ "required": ["signal"] }, { "required": ["binding"] }],
-      "properties": {
-        "signal": { "$ref": "#/$defs/signal_ref" },
-        "binding": { "$ref": "#/$defs/identifier" }
+        "in": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/value" } },
+        "contains": { "$ref": "#/$defs/enum_member", "description": "For a flags signal: that bit is set." },
+        "not_contains": { "$ref": "#/$defs/enum_member" }
       }
     },
 
@@ -305,19 +334,17 @@
         "write": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["value"],
-          "allOf": [{ "$ref": "#/$defs/target" }],
+          "required": ["signal", "value"],
           "properties": {
-            "signal": true,
-            "binding": true,
+            "signal": { "$ref": "#/$defs/signal_ref" },
             "value": { "$ref": "#/$defs/value" }
           }
         },
         "read": {
           "type": "object",
           "additionalProperties": false,
-          "allOf": [{ "$ref": "#/$defs/target" }],
-          "properties": { "signal": true, "binding": true }
+          "required": ["signal"],
+          "properties": { "signal": { "$ref": "#/$defs/signal_ref" } }
         },
         "reread": {
           "type": "array",
@@ -334,6 +361,8 @@
             "signal": true,
             "equals": true,
             "in": true,
+            "contains": true,
+            "not_contains": true,
             "timeout_ms": { "type": "number", "exclusiveMinimum": 0 },
             "poll_ms": { "type": "number", "exclusiveMinimum": 0 }
           }

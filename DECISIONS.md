@@ -227,3 +227,77 @@ scratch.
 **What survives.** Nothing about repeat, but the sketch established that the
 cross-instance lint depends only on a signal knowing which instance it belongs
 to, not on anything generating it. That is tracked separately as D6.
+
+## D6 — Adopt the company library's vocabulary; add flags; drop the invented parts
+
+The profile now describes the real product: a residential AHU with a Modbus
+server interface and a Modbus client interface, two air chains, one EC fan per
+chain (analog output or Modbus), up to three I2C sensor channels per chain, one
+auxiliary digital input per chain, and left-right swap.
+
+Naming and value conventions come from `3SModbus/DeviceLibrary`, which is the
+authority here — it already encodes years of decisions about what these
+registers are called. Adopted from it:
+
+- the HR1–HR10 common block: slave address, baud rate, parity, device type,
+  hardware and firmware version, termination resistor, registers reset
+- `<Measurand> Level`, `<Measurand> Correction Value`, `Sensor State`,
+  `Alerts` as OK / yellow / red, `Minimum`/`Maximum Output Value`,
+  `Start Output Value`, kickstart control and time, overwrite enable and value
+- output type as 0–10 VDC / 0–20 mA / PWM 12 V / PWM open collector
+- the IR501+ diagnostics block: MCU temperature, lifetime, internal voltages
+- units as written there: °C, %RH, ppm, hPa, %, VDC, rpm, seconds, minutes, bps
+- a `device` section, because a profile is one firmware version's register map
+
+**`flags` is new, and the product forced it.** A sensor channel can carry
+several measurands at once, so channel capability is not a choice among
+alternatives — it is a set. That needs a bit field with membership tests, which
+the library also has (its `bitwise` decoder), so `flags:` maps bit index to
+member name and expressions test it with `contains` / `not contains`. `enum`
+and `flags` are mutually exclusive on one signal: a register is either
+exclusive states or independent bits. Device status words, fan state and sensor
+state all became `flags` too, which is what they always were.
+
+**Two provisional things from D2 are now resolved, both by deletion:**
+
+- The `registers:` section is gone. It existed because the old sketch wrote to
+  `binding: unlock` and `binding: cmd` with nothing declaring them. The library
+  has no such concept: a command is an ordinary holding register with
+  `access: write_only` and a dictionary of states, like `Modbus Registers
+  Reset: idle | reset`. Procedure steps now target signals only.
+- The invented `user` / `commissioning` / `factory` access ladder is gone,
+  replaced by the library's `read_only` / `write_only` / `read_write`, with
+  `hidden` for service registers. Privilege was never what `access` meant.
+
+Also added: `default` at signal level (every library register has one),
+`decimals` for display precision (their `decimalPlaces`; `scale` already fixes
+the value), and `not_contains` alongside `equals` / `in` in conditions.
+
+**A hole this exposed in D2's schema.** YAML parses `0: none` as an *integer*
+key, and a JSON Schema `propertyNames` pattern only constrains strings — so
+every enum and flag key rule was silently vacuous, and a flag bit index of 16
+validated cleanly. `validate.py` now canonicalises those keys to strings before
+validation, which is also the form any JSON rendering of the profile will have.
+It changes key types only, never what D5 protects.
+
+**Scale, measured.** 173 signals, 1693 lines, 107 holding and 66 input
+registers, four procedures. This is the first real test of D5: the six sensor
+channels are six near-identical 18-signal blocks, written out. If that becomes
+intolerable to maintain by hand, D5 is where to reopen the argument — the
+numbers to weigh it against are in D4.
+
+**Open, and needing the device author:**
+
+- Every address is invented. The block layout imitates the library's style
+  (decades per subsystem, 20 apart per channel, IR501+ diagnostics) but nothing
+  is real.
+- Bypass, preheater/reheater, heat-recovery efficiency and filter monitoring
+  are not modelled. They were not in the hardware list, but a residential AHU
+  normally has them, and the industry Modbus maps for comparable units all
+  expose them.
+- Hardware and firmware version are single `uint16` registers here. The library
+  decodes them bytewise as hex. The format has no way to say that yet.
+- `access.gaps_readable: true` and the read/write word limits are guesses.
+- The client interface is modelled as configuration only. What it polls on the
+  far side is another device's profile, and how one profile references another
+  is not decided.

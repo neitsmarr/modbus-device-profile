@@ -35,6 +35,7 @@ SCHEMA = HERE / "device-profile.schema.json"
 EXPR_KEYWORDS = {
     "and", "or", "not", "in", "any", "all",
     "true", "false", "null",
+    "contains",          # flags membership: <signal> contains <member>
 }
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -65,6 +66,28 @@ class Report:
         return 1 if self.errors else 0
 
 
+def normalize(node):
+    """Stringify enum/flags keys before schema validation.
+
+    YAML parses `0: none` as an integer key. JSON has no integer keys, and a
+    JSON Schema `propertyNames` pattern only constrains strings -- so with
+    integer keys the enum and flag key rules silently pass anything, including
+    a bit index of 16. Canonicalising to strings here makes them enforceable
+    and matches what any JSON form of the profile will hold.
+
+    This changes key types only. Per D5 it may not, and does not, change which
+    signals exist, what they are called, or where they live.
+    """
+    if isinstance(node, dict):
+        return {k: (
+            {str(bk): bv for bk, bv in v.items()}
+            if k in ("enum", "flags") and isinstance(v, dict) else normalize(v)
+        ) for k, v in node.items()}
+    if isinstance(node, list):
+        return [normalize(v) for v in node]
+    return node
+
+
 def load_yaml(path: pathlib.Path):
     try:
         import yaml
@@ -82,7 +105,7 @@ def check_schema(doc, rep: Report) -> None:
         return
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
     validator = jsonschema.Draft202012Validator(schema)
-    for err in sorted(validator.iter_errors(doc), key=lambda e: list(e.path)):
+    for err in sorted(validator.iter_errors(normalize(doc)), key=lambda e: list(e.path)):
         where = "/".join(str(p) for p in err.path) or "(root)"
         rep.error(f"{where}: {err.message}")
 
@@ -111,14 +134,15 @@ def expression_identifiers(expr: str) -> set[str]:
 
 def check_references(doc, rep: Report) -> None:
     signals = doc.get("signals") or {}
-    registers = doc.get("registers") or {}
     procedures = doc.get("procedures") or {}
 
     enum_members: dict[str, set[str]] = {}
     for name, sig in signals.items():
         members = set((sig.get("enum") or {}).values())
+        members |= set((sig.get("flags") or {}).values())
         for variant in sig.get("variants") or []:
             members |= set((variant.get("enum") or {}).values())
+            members |= set((variant.get("flags") or {}).values())
         if members:
             enum_members[name] = members
     all_members = {m for ms in enum_members.values() for m in ms}
@@ -130,7 +154,9 @@ def check_references(doc, rep: Report) -> None:
     # -- explicit signal references ------------------------------------------
     for path, key, value in walk(doc):
         where = "/".join(str(p) for p in path + (key,))
-        if key == "signal" and isinstance(value, str):
+        if key in ("contains", "not_contains") and isinstance(value, str):
+            pass          # membership is checked against the signal's own flags below
+        elif key == "signal" and isinstance(value, str):
             want_signal(value, where)
         elif key == "read" and isinstance(value, str):
             want_signal(value, where)
@@ -141,9 +167,6 @@ def check_references(doc, rep: Report) -> None:
         elif key == "reread" and isinstance(value, list):
             for ref in value:
                 want_signal(ref, where)
-        elif key == "binding" and isinstance(value, str):
-            if value not in registers:
-                rep.error(f"{where}: raw register '{value}' is referenced but never declared")
 
     # -- identifiers inside expressions --------------------------------------
     for path, key, value in walk(doc):
