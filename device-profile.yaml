@@ -54,6 +54,9 @@ procedures:
     confirm: "Changes alarm thresholds. Detector will not alarm during calibration mode."
     preconditions:
       - device_mode == idle
+      # UNREPRESENTABLE under D5: no channel dimension, so there is no
+      # channel[*] to quantify over. Rewrite as an explicit disjunction over
+      # the real per-channel alarm_active signals once they are declared.
       - "not any(channel[*].alarm_active)"
     steps:
       - write: { binding: unlock, value: 0x00A5 }

@@ -182,3 +182,48 @@ them through one `repeat`.
 **Status.** The no-dimension half is decided. Whether to add `repeat` at all,
 or keep even the 2×3 product fully hand-written, is still open — pending a
 concrete syntax sketch to judge rather than argue about.
+
+## D5 — No repeat blocks. The profile is readable without executing anything
+
+**Decided.** D4 left open whether the nested product should get a pre-expansion
+`repeat` block. It should not. Signals are written out, one declaration each,
+by hand. This resolves D4 fully: no channel dimension and no repetition
+construct.
+
+**What the sketch showed.** A working `repeat` implementation for the 2x3
+product came to 68 lines of YAML against 169 hand-written, with a 62-line
+loader pass. The line count was never the problem:
+
+- The design needed an `overrides` section to express its first realistic
+  example — the supply line's first channel keeping a legacy address. An
+  abstraction that requires an escape hatch immediately is not describing the
+  domain, it is fighting it. Real register maps are irregular; a construct
+  whose premise is regularity will be in permanent tension with them.
+- Override merge semantics had to be specified and were wrong on the first
+  attempt: a shallow merge silently dropped `type: uint16` from an overridden
+  binding. That class of bug is permanent, not a one-off.
+- It was hard to read. To answer "what registers does this device have?" you
+  had to simulate the expansion in your head — two nested loops, a base
+  summed per table, then textual substitution. For a file whose entire purpose
+  is to be the one place the answer lives, that is disqualifying, independent
+  of every other cost.
+
+**The general rule this establishes.** The profile must be readable without
+executing anything. No pass may change which signals exist, what they are
+called, or where they live. A reader with the file and no tooling can always
+enumerate the register map by eye. Deriving *indexes* over what is written is
+fine and expected (D1's reverse index); *generating* what is written is not.
+
+This is the criterion to apply to the open expression grammar (D3) as well: an
+expression may be evaluated, but it may never conjure a signal.
+
+**Reversible, deliberately.** The reasoning above is about cost, not
+impossibility, and `expand.py` is 62 lines. If a future product makes the
+duplication genuinely painful — the threshold is probably well past the 18
+signals and 12 rule copies measured here — this is worth reopening. The record
+exists so that decision starts from what was already learned rather than from
+scratch.
+
+**What survives.** Nothing about repeat, but the sketch established that the
+cross-instance lint depends only on a signal knowing which instance it belongs
+to, not on anything generating it. That is tracked separately as D6.
