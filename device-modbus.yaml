@@ -9,6 +9,13 @@
 #
 # Properties are referenced by name from device-properties.yaml.
 #
+# A register carries only what cannot be derived. Its access is NOT stated: it
+# follows from the properties it carries, and may be narrowed here only to say
+# that the bus offers less than the property allows. Its encoding IS stated,
+# always, even though the obvious width is right 178 times out of 190 -- if it
+# were derived from a range, widening that range in the semantic document would
+# silently change the wire format (D16).
+#
 # ASSUMPTIONS, all needing confirmation against firmware:
 #   - every address here is invented; only the layout style is borrowed from
 #     the company library
@@ -32,652 +39,522 @@ registers:
 
   - space: holding
     address: 1
-    access: read_write
     fields: [ { property: server_slave_address, encoding: uint16 } ]
 
   - space: holding
     address: 2
-    access: read_write
     fields: [ { property: server_baud_rate, encoding: uint16 } ]
 
   - space: holding
     address: 3
-    access: read_write
     fields: [ { property: server_parity, encoding: uint16 } ]
 
   - space: holding
     address: 4
-    access: read_only
     fields: [ { property: device_type, encoding: uint16 } ]
 
   - space: holding
     address: 5
-    access: read_only
     fields: [ { property: hardware_version, encoding: uint16 } ]
 
   - space: holding
     address: 6
-    access: read_only
     fields: [ { property: firmware_version, encoding: uint16 } ]
 
   - space: holding
     address: 9
-    access: read_write
     fields: [ { property: server_termination_resistor, encoding: uint16 } ]
 
   - space: holding
     address: 10
-    access: write_only
     fields: [ { property: modbus_registers_reset, encoding: uint16 } ]
 
   - space: holding
     address: 11
-    access: read_write
     fields: [ { property: client_enable, encoding: uint16 } ]
 
   - space: holding
     address: 12
-    access: read_write
     fields: [ { property: client_baud_rate, encoding: uint16 } ]
 
   - space: holding
     address: 13
-    access: read_write
     fields: [ { property: client_parity, encoding: uint16 } ]
 
   - space: holding
     address: 14
-    access: read_write
     fields: [ { property: client_poll_interval, encoding: uint16 } ]
 
   - space: holding
     address: 15
-    access: read_write
     fields: [ { property: client_response_timeout, encoding: uint16 } ]
 
   - space: holding
     address: 16
-    access: read_write
     fields: [ { property: client_retry_count, encoding: uint16 } ]
 
   - space: holding
     address: 21
-    access: read_write
     fields: [ { property: left_right_swap, encoding: uint16 } ]
 
   - space: holding
     address: 22
-    access: read_write
     fields: [ { property: operating_mode, encoding: uint16 } ]
 
   - space: holding
     address: 23
-    access: read_write
     fields: [ { property: ventilation_level, encoding: uint16 } ]
 
   - space: holding
     address: 24
-    access: read_write
     fields: [ { property: co2_setpoint, encoding: uint16 } ]
 
   - space: holding
     address: 25
-    access: read_write
     fields: [ { property: humidity_setpoint, encoding: uint16 } ]
 
   - space: holding
     address: 26
-    access: read_write
     fields: [ { property: modbus_safety_timeout, encoding: uint16 } ]
 
   - space: holding
     address: 27
-    access: write_only
     fields: [ { property: sensor_bus_rescan, encoding: uint16 } ]
 
   - space: holding
     address: 31
-    access: read_write
     fields: [ { property: outdoor_air_temperature_source, encoding: uint16 } ]
 
   - space: holding
     address: 32
-    access: read_write
     fields: [ { property: supply_air_temperature_source, encoding: uint16 } ]
 
   - space: holding
     address: 33
-    access: read_write
     fields: [ { property: extract_air_temperature_source, encoding: uint16 } ]
 
   - space: holding
     address: 34
-    access: read_write
     fields: [ { property: exhaust_air_temperature_source, encoding: uint16 } ]
 
   - space: holding
     address: 41
-    access: read_write
     fields: [ { property: preheater_installed, encoding: uint16 } ]
 
   - space: holding
     address: 42
-    access: read_write
     fields: [ { property: preheater_control_mode, encoding: uint16 } ]
 
   - space: holding
     address: 43
-    access: read_write
     fields: [ { property: preheater_output_type, encoding: uint16 } ]
 
   - space: holding
     address: 44
-    access: read_write
     fields: [ { property: preheater_minimum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 45
-    access: read_write
     fields: [ { property: preheater_maximum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 46
-    access: read_write
     fields: [ { property: preheater_frost_protection_setpoint, encoding: int16 } ]
 
   - space: holding
     address: 47
-    access: read_write
     fields: [ { property: preheater_supply_temperature_setpoint, encoding: int16 } ]
 
   - space: holding
     address: 51
-    access: read_write
     fields: [ { property: bypass_control_mode, encoding: uint16 } ]
 
   - space: holding
     address: 52
-    access: read_write
     fields: [ { property: bypass_output_type, encoding: uint16 } ]
 
   - space: holding
     address: 53
-    access: read_write
     fields: [ { property: bypass_minimum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 54
-    access: read_write
     fields: [ { property: bypass_maximum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 55
-    access: read_write
     fields: [ { property: bypass_outdoor_temperature_threshold, encoding: int16 } ]
 
   - space: holding
     address: 56
-    access: read_write
     fields: [ { property: bypass_extract_temperature_threshold, encoding: int16 } ]
 
   - space: holding
     address: 57
-    access: read_write
     fields: [ { property: bypass_manual_position, encoding: uint16 } ]
 
   - space: holding
     address: 61
-    access: read_write
     fields: [ { property: filter_monitoring_mode, encoding: uint16 } ]
 
   - space: holding
     address: 62
-    access: read_write
     fields: [ { property: filter_replacement_interval, encoding: uint16 } ]
 
   - space: holding
     address: 63
-    access: read_write
     fields: [ { property: filter_differential_pressure_threshold, encoding: uint16 } ]
 
   - space: holding
     address: 64
-    access: write_only
     fields: [ { property: filter_counter_reset, encoding: uint16 } ]
 
   - space: holding
     address: 101
-    access: read_write
     fields: [ { property: supply_fan_control_source, encoding: uint16 } ]
 
   - space: holding
     address: 102
-    access: read_write
     fields: [ { property: supply_fan_analog_output_type, encoding: uint16 } ]
 
   - space: holding
     address: 103
-    access: read_write
     fields: [ { property: supply_fan_minimum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 104
-    access: read_write
     fields: [ { property: supply_fan_maximum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 105
-    access: read_write
     fields: [ { property: supply_fan_start_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 106
-    access: read_write
     fields: [ { property: supply_fan_kickstart_control, encoding: uint16 } ]
 
   - space: holding
     address: 107
-    access: read_write
     fields: [ { property: supply_fan_kickstart_time, encoding: uint16 } ]
 
   - space: holding
     address: 108
-    access: read_write
     fields: [ { property: supply_fan_modbus_slave_address, encoding: uint16 } ]
 
   - space: holding
     address: 109
-    access: read_write
     fields: [ { property: supply_fan_modbus_speed_register, encoding: uint16 } ]
 
   - space: holding
     address: 110
-    access: read_write
     fields: [ { property: supply_fan_overwrite_enable, encoding: uint16 } ]
 
   - space: holding
     address: 111
-    access: read_write
     fields: [ { property: supply_fan_overwrite_value, encoding: uint16 } ]
 
   - space: holding
     address: 116
-    access: read_write
     fields: [ { property: supply_digital_input_function, encoding: uint16 } ]
 
   - space: holding
     address: 117
-    access: read_write
     fields: [ { property: supply_digital_input_polarity, encoding: uint16 } ]
 
   - space: holding
     address: 131
-    access: read_write
     fields: [ { property: extract_fan_control_source, encoding: uint16 } ]
 
   - space: holding
     address: 132
-    access: read_write
     fields: [ { property: extract_fan_analog_output_type, encoding: uint16 } ]
 
   - space: holding
     address: 133
-    access: read_write
     fields: [ { property: extract_fan_minimum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 134
-    access: read_write
     fields: [ { property: extract_fan_maximum_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 135
-    access: read_write
     fields: [ { property: extract_fan_start_output_value, encoding: uint16 } ]
 
   - space: holding
     address: 136
-    access: read_write
     fields: [ { property: extract_fan_kickstart_control, encoding: uint16 } ]
 
   - space: holding
     address: 137
-    access: read_write
     fields: [ { property: extract_fan_kickstart_time, encoding: uint16 } ]
 
   - space: holding
     address: 138
-    access: read_write
     fields: [ { property: extract_fan_modbus_slave_address, encoding: uint16 } ]
 
   - space: holding
     address: 139
-    access: read_write
     fields: [ { property: extract_fan_modbus_speed_register, encoding: uint16 } ]
 
   - space: holding
     address: 140
-    access: read_write
     fields: [ { property: extract_fan_overwrite_enable, encoding: uint16 } ]
 
   - space: holding
     address: 141
-    access: read_write
     fields: [ { property: extract_fan_overwrite_value, encoding: uint16 } ]
 
   - space: holding
     address: 146
-    access: read_write
     fields: [ { property: extract_digital_input_function, encoding: uint16 } ]
 
   - space: holding
     address: 147
-    access: read_write
     fields: [ { property: extract_digital_input_polarity, encoding: uint16 } ]
 
   - space: holding
     address: 201
-    access: read_write
     fields: [ { property: supply_ch1_enable, encoding: uint16 } ]
 
   - space: holding
     address: 202
-    access: read_write
     fields: [ { property: supply_ch1_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 203
-    access: read_write
     fields: [ { property: supply_ch1_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 204
-    access: read_write
     fields: [ { property: supply_ch1_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 205
-    access: read_write
     fields: [ { property: supply_ch1_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 206
-    access: read_write
     fields: [ { property: supply_ch1_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 211
-    access: read_write
     fields: [ { property: supply_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 212
-    access: read_write
     fields: [ { property: supply_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 213
-    access: read_write
     fields: [ { property: supply_ch1_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 214
-    access: read_write
     fields: [ { property: supply_ch1_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 221
-    access: read_write
     fields: [ { property: supply_ch2_enable, encoding: uint16 } ]
 
   - space: holding
     address: 222
-    access: read_write
     fields: [ { property: supply_ch2_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 223
-    access: read_write
     fields: [ { property: supply_ch2_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 224
-    access: read_write
     fields: [ { property: supply_ch2_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 225
-    access: read_write
     fields: [ { property: supply_ch2_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 226
-    access: read_write
     fields: [ { property: supply_ch2_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 231
-    access: read_write
     fields: [ { property: supply_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 232
-    access: read_write
     fields: [ { property: supply_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 233
-    access: read_write
     fields: [ { property: supply_ch2_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 234
-    access: read_write
     fields: [ { property: supply_ch2_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 241
-    access: read_write
     fields: [ { property: supply_ch3_enable, encoding: uint16 } ]
 
   - space: holding
     address: 242
-    access: read_write
     fields: [ { property: supply_ch3_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 243
-    access: read_write
     fields: [ { property: supply_ch3_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 244
-    access: read_write
     fields: [ { property: supply_ch3_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 245
-    access: read_write
     fields: [ { property: supply_ch3_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 246
-    access: read_write
     fields: [ { property: supply_ch3_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 251
-    access: read_write
     fields: [ { property: supply_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 252
-    access: read_write
     fields: [ { property: supply_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 253
-    access: read_write
     fields: [ { property: supply_ch3_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 254
-    access: read_write
     fields: [ { property: supply_ch3_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 261
-    access: read_write
     fields: [ { property: extract_ch1_enable, encoding: uint16 } ]
 
   - space: holding
     address: 262
-    access: read_write
     fields: [ { property: extract_ch1_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 263
-    access: read_write
     fields: [ { property: extract_ch1_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 264
-    access: read_write
     fields: [ { property: extract_ch1_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 265
-    access: read_write
     fields: [ { property: extract_ch1_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 266
-    access: read_write
     fields: [ { property: extract_ch1_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 271
-    access: read_write
     fields: [ { property: extract_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 272
-    access: read_write
     fields: [ { property: extract_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 273
-    access: read_write
     fields: [ { property: extract_ch1_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 274
-    access: read_write
     fields: [ { property: extract_ch1_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 281
-    access: read_write
     fields: [ { property: extract_ch2_enable, encoding: uint16 } ]
 
   - space: holding
     address: 282
-    access: read_write
     fields: [ { property: extract_ch2_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 283
-    access: read_write
     fields: [ { property: extract_ch2_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 284
-    access: read_write
     fields: [ { property: extract_ch2_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 285
-    access: read_write
     fields: [ { property: extract_ch2_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 286
-    access: read_write
     fields: [ { property: extract_ch2_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 291
-    access: read_write
     fields: [ { property: extract_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 292
-    access: read_write
     fields: [ { property: extract_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 293
-    access: read_write
     fields: [ { property: extract_ch2_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 294
-    access: read_write
     fields: [ { property: extract_ch2_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 301
-    access: read_write
     fields: [ { property: extract_ch3_enable, encoding: uint16 } ]
 
   - space: holding
     address: 302
-    access: read_write
     fields: [ { property: extract_ch3_temperature_correction, encoding: int16 } ]
 
   - space: holding
     address: 303
-    access: read_write
     fields: [ { property: extract_ch3_relative_humidity_correction, encoding: int16 } ]
 
   - space: holding
     address: 304
-    access: read_write
     fields: [ { property: extract_ch3_voc_correction, encoding: int16 } ]
 
   - space: holding
     address: 305
-    access: read_write
     fields: [ { property: extract_ch3_carbon_dioxide_correction, encoding: int16 } ]
 
   - space: holding
     address: 306
-    access: read_write
     fields: [ { property: extract_ch3_barometric_pressure_correction, encoding: int16 } ]
 
   - space: holding
     address: 311
-    access: read_write
     fields: [ { property: extract_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 312
-    access: read_write
     fields: [ { property: extract_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 313
-    access: read_write
     fields: [ { property: extract_ch3_voc_alert_1_level, encoding: uint16 } ]
 
   - space: holding
     address: 314
-    access: read_write
     fields: [ { property: extract_ch3_voc_alert_2_level, encoding: uint16 } ]
 
   - space: holding
     address: 990
-    access: write_only
     fields: [ { property: device_reset, encoding: uint16 } ]
 
   # ------------------------- input registers -------------------------
@@ -688,7 +565,7 @@ registers:
     description: >-
       Fault conditions that stop normal operation. Any bit set here is
       reflected in application_state.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: error_supply_voltage_fault }
       - { bit: 1, property: error_internal_voltage_fault }
@@ -705,7 +582,7 @@ registers:
     description: >-
       Conditions that degrade operation or need attention but do not stop
       ventilation.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: warning_supply_voltage_warning }
       - { bit: 1, property: warning_internal_voltage_warning }
@@ -716,52 +593,42 @@ registers:
 
   - space: input
     address: 3
-    access: read_only
     fields: [ { property: supply_voltage, encoding: uint16 } ]
 
   - space: input
     address: 11
-    access: read_only
     fields: [ { property: client_state, encoding: uint16 } ]
 
   - space: input
     address: 12
-    access: read_only
     fields: [ { property: application_state, encoding: uint16 } ]
 
   - space: input
     address: 13
-    access: read_only
     fields: [ { property: sensor_bus_state, encoding: uint16 } ]
 
   - space: input
     address: 21
-    access: read_only
     fields: [ { property: outdoor_air_temperature, encoding: int16 } ]
 
   - space: input
     address: 22
-    access: read_only
     fields: [ { property: supply_air_temperature, encoding: int16 } ]
 
   - space: input
     address: 23
-    access: read_only
     fields: [ { property: extract_air_temperature, encoding: int16 } ]
 
   - space: input
     address: 24
-    access: read_only
     fields: [ { property: exhaust_air_temperature, encoding: int16 } ]
 
   - space: input
     address: 25
-    access: read_only
     fields: [ { property: heat_recovery_efficiency, encoding: uint16 } ]
 
   - space: input
     address: 31
-    access: read_only
     fields: [ { property: preheater_output_value, encoding: uint16 } ]
 
   - space: input
@@ -770,7 +637,7 @@ registers:
     description: >-
       Pre-heater diagnostics. Meaningful only on units where the pre-heater
       option is fitted.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: preheater_fault }
       - { bit: 1, property: preheater_thermal_cutout_open }
@@ -779,7 +646,6 @@ registers:
 
   - space: input
     address: 41
-    access: read_only
     fields: [ { property: bypass_position, encoding: uint16 } ]
 
   - space: input
@@ -788,7 +654,7 @@ registers:
     description: >-
       Bypass damper diagnostics, including the two conditions under which the
       unit holds the damper closed regardless of the control mode.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: bypass_damper_fault }
       - { bit: 1, property: bypass_position_feedback_missing }
@@ -797,12 +663,10 @@ registers:
 
   - space: input
     address: 51
-    access: read_only
     fields: [ { property: filter_elapsed_time, encoding: uint16 } ]
 
   - space: input
     address: 52
-    access: read_only
     fields: [ { property: filter_differential_pressure, encoding: uint16 } ]
 
   - space: input
@@ -810,7 +674,7 @@ registers:
     title: "Filter State"
     description: >-
       Filter condition as judged by the selected monitoring mode.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: filter_replacement_due }
       - { bit: 1, property: filter_replacement_overdue }
@@ -818,12 +682,10 @@ registers:
 
   - space: input
     address: 101
-    access: read_only
     fields: [ { property: supply_fan_output_value, encoding: uint16 } ]
 
   - space: input
     address: 102
-    access: read_only
     fields: [ { property: supply_fan_speed, encoding: uint16 } ]
 
   - space: input
@@ -832,7 +694,7 @@ registers:
     description: >-
       Fault and diagnostic bits for the supply fan channel, whichever control
       source is selected.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: supply_fan_fault }
       - { bit: 1, property: supply_fan_tacho_missing }
@@ -841,17 +703,14 @@ registers:
 
   - space: input
     address: 104
-    access: read_only
     fields: [ { property: supply_digital_input_state, encoding: uint16 } ]
 
   - space: input
     address: 131
-    access: read_only
     fields: [ { property: extract_fan_output_value, encoding: uint16 } ]
 
   - space: input
     address: 132
-    access: read_only
     fields: [ { property: extract_fan_speed, encoding: uint16 } ]
 
   - space: input
@@ -860,7 +719,7 @@ registers:
     description: >-
       Fault and diagnostic bits for the extract fan channel, whichever control
       source is selected.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: extract_fan_fault }
       - { bit: 1, property: extract_fan_tacho_missing }
@@ -869,7 +728,6 @@ registers:
 
   - space: input
     address: 134
-    access: read_only
     fields: [ { property: extract_digital_input_state, encoding: uint16 } ]
 
   - space: input
@@ -879,7 +737,7 @@ registers:
       Which measurands the sensor module on supply channel 1 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: supply_ch1_provides_temperature }
       - { bit: 1, property: supply_ch1_provides_relative_humidity }
@@ -893,7 +751,7 @@ registers:
     description: >-
       Condition of the sensor module on supply channel 1. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: supply_ch1_sensor_problem }
       - { bit: 1, property: supply_ch1_sensor_replacement }
@@ -902,32 +760,26 @@ registers:
 
   - space: input
     address: 203
-    access: read_only
     fields: [ { property: supply_ch1_alerts, encoding: uint16 } ]
 
   - space: input
     address: 204
-    access: read_only
     fields: [ { property: supply_ch1_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 205
-    access: read_only
     fields: [ { property: supply_ch1_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 206
-    access: read_only
     fields: [ { property: supply_ch1_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 207
-    access: read_only
     fields: [ { property: supply_ch1_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 208
-    access: read_only
     fields: [ { property: supply_ch1_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
@@ -937,7 +789,7 @@ registers:
       Which measurands the sensor module on supply channel 2 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: supply_ch2_provides_temperature }
       - { bit: 1, property: supply_ch2_provides_relative_humidity }
@@ -951,7 +803,7 @@ registers:
     description: >-
       Condition of the sensor module on supply channel 2. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: supply_ch2_sensor_problem }
       - { bit: 1, property: supply_ch2_sensor_replacement }
@@ -960,32 +812,26 @@ registers:
 
   - space: input
     address: 223
-    access: read_only
     fields: [ { property: supply_ch2_alerts, encoding: uint16 } ]
 
   - space: input
     address: 224
-    access: read_only
     fields: [ { property: supply_ch2_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 225
-    access: read_only
     fields: [ { property: supply_ch2_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 226
-    access: read_only
     fields: [ { property: supply_ch2_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 227
-    access: read_only
     fields: [ { property: supply_ch2_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 228
-    access: read_only
     fields: [ { property: supply_ch2_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
@@ -995,7 +841,7 @@ registers:
       Which measurands the sensor module on supply channel 3 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: supply_ch3_provides_temperature }
       - { bit: 1, property: supply_ch3_provides_relative_humidity }
@@ -1009,7 +855,7 @@ registers:
     description: >-
       Condition of the sensor module on supply channel 3. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: supply_ch3_sensor_problem }
       - { bit: 1, property: supply_ch3_sensor_replacement }
@@ -1018,32 +864,26 @@ registers:
 
   - space: input
     address: 243
-    access: read_only
     fields: [ { property: supply_ch3_alerts, encoding: uint16 } ]
 
   - space: input
     address: 244
-    access: read_only
     fields: [ { property: supply_ch3_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 245
-    access: read_only
     fields: [ { property: supply_ch3_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 246
-    access: read_only
     fields: [ { property: supply_ch3_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 247
-    access: read_only
     fields: [ { property: supply_ch3_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 248
-    access: read_only
     fields: [ { property: supply_ch3_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
@@ -1053,7 +893,7 @@ registers:
       Which measurands the sensor module on extract channel 1 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: extract_ch1_provides_temperature }
       - { bit: 1, property: extract_ch1_provides_relative_humidity }
@@ -1067,7 +907,7 @@ registers:
     description: >-
       Condition of the sensor module on extract channel 1. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: extract_ch1_sensor_problem }
       - { bit: 1, property: extract_ch1_sensor_replacement }
@@ -1076,32 +916,26 @@ registers:
 
   - space: input
     address: 263
-    access: read_only
     fields: [ { property: extract_ch1_alerts, encoding: uint16 } ]
 
   - space: input
     address: 264
-    access: read_only
     fields: [ { property: extract_ch1_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 265
-    access: read_only
     fields: [ { property: extract_ch1_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 266
-    access: read_only
     fields: [ { property: extract_ch1_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 267
-    access: read_only
     fields: [ { property: extract_ch1_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 268
-    access: read_only
     fields: [ { property: extract_ch1_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
@@ -1111,7 +945,7 @@ registers:
       Which measurands the sensor module on extract channel 2 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: extract_ch2_provides_temperature }
       - { bit: 1, property: extract_ch2_provides_relative_humidity }
@@ -1125,7 +959,7 @@ registers:
     description: >-
       Condition of the sensor module on extract channel 2. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: extract_ch2_sensor_problem }
       - { bit: 1, property: extract_ch2_sensor_replacement }
@@ -1134,32 +968,26 @@ registers:
 
   - space: input
     address: 283
-    access: read_only
     fields: [ { property: extract_ch2_alerts, encoding: uint16 } ]
 
   - space: input
     address: 284
-    access: read_only
     fields: [ { property: extract_ch2_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 285
-    access: read_only
     fields: [ { property: extract_ch2_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 286
-    access: read_only
     fields: [ { property: extract_ch2_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 287
-    access: read_only
     fields: [ { property: extract_ch2_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 288
-    access: read_only
     fields: [ { property: extract_ch2_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
@@ -1169,7 +997,7 @@ registers:
       Which measurands the sensor module on extract channel 3 reports.
       Discovered at startup and after a bus rescan; a channel may report
       several at once.
-    access: read_only
+    clear_label: "No measurands reported"
     fields:
       - { bit: 0, property: extract_ch3_provides_temperature }
       - { bit: 1, property: extract_ch3_provides_relative_humidity }
@@ -1183,7 +1011,7 @@ registers:
     description: >-
       Condition of the sensor module on extract channel 3. Its readings are
       only trustworthy while none of these bits is set.
-    access: read_only
+    clear_label: "OK"
     fields:
       - { bit: 0, property: extract_ch3_sensor_problem }
       - { bit: 1, property: extract_ch3_sensor_replacement }
@@ -1192,55 +1020,44 @@ registers:
 
   - space: input
     address: 303
-    access: read_only
     fields: [ { property: extract_ch3_alerts, encoding: uint16 } ]
 
   - space: input
     address: 304
-    access: read_only
     fields: [ { property: extract_ch3_temperature_level, encoding: int16 } ]
 
   - space: input
     address: 305
-    access: read_only
     fields: [ { property: extract_ch3_relative_humidity_level, encoding: uint16 } ]
 
   - space: input
     address: 306
-    access: read_only
     fields: [ { property: extract_ch3_voc_level, encoding: uint16 } ]
 
   - space: input
     address: 307
-    access: read_only
     fields: [ { property: extract_ch3_carbon_dioxide_level, encoding: uint16 } ]
 
   - space: input
     address: 308
-    access: read_only
     fields: [ { property: extract_ch3_barometric_pressure_level, encoding: uint16 } ]
 
   - space: input
     address: 501
-    access: read_only
     fields: [ { property: mcu_temperature, encoding: int16 } ]
 
   - space: input
     address: 504
-    access: read_only
     fields: [ { property: lifetime_days, encoding: uint16 } ]
 
   - space: input
     address: 505
-    access: read_only
     fields: [ { property: lifetime_minutes, encoding: uint16 } ]
 
   - space: input
     address: 506
-    access: read_only
     fields: [ { property: internal_voltage_12v, encoding: uint16 } ]
 
   - space: input
     address: 507
-    access: read_only
     fields: [ { property: internal_voltage_3v3, encoding: uint16 } ]

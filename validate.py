@@ -386,13 +386,20 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
                 if top > WIDTH_CAPACITY[enc][1]:
                     rep.error(f"{fat}: enum value {top} does not fit '{enc}'")
 
+        # A register's access is derived from what it carries. An explicit one may
+        # only narrow it: the bus may offer less than the property allows, never
+        # more. Checking agreement instead of deriving would be D1's mistake --
+        # two copies of one fact, with a checker standing in for a single source.
         declared = reg.get("access")
         if declared:
-            kinds = {props[f["property"]].get("access", "read_write")
-                     for f in fields if f.get("property") in props}
-            if len(kinds) == 1 and declared not in kinds:
-                rep.warn(f"{at}: register access '{declared}' disagrees with its "
-                         f"properties' access '{kinds.pop()}'")
+            allowed = {props[f["property"]].get("access", "read_write")
+                       for f in fields if f.get("property") in props}
+            derived = ("read_only" if allowed == {"read_only"}
+                       else "write_only" if allowed == {"write_only"}
+                       else "read_write")
+            if derived != "read_write" and declared != derived:
+                rep.error(f"{at}: access '{declared}' widens what its properties allow "
+                          f"('{derived}'); a register may only narrow access")
 
     for name, sig in props.items():
         if not sig.get("internal") and name not in owner:

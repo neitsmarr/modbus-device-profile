@@ -117,6 +117,28 @@
       ],
       "allOf": [
         {
+          "description": "A clear_label only means something for a register carrying bits.",
+          "if": {
+            "required": [
+              "clear_label"
+            ]
+          },
+          "then": {
+            "required": [
+              "fields"
+            ],
+            "properties": {
+              "fields": {
+                "items": {
+                  "required": [
+                    "bit"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
           "description": "A reserved range carries nothing; anything else carries something.",
           "if": {
             "required": [
@@ -189,7 +211,7 @@
             "write_only",
             "read_write"
           ],
-          "description": "Whether a client may write this register. A fact about the register: eight bools packed into a status word are read-only because the register is."
+          "description": "OPTIONAL and normally omitted: a register's access follows from the properties it carries, and stating it here would duplicate a fact the semantic document already holds. Give it only to NARROW what the bus offers -- a setting the device lets a local interface change but exposes read-only over Modbus. Widening is an error, and validate.py checks it."
         },
         "reserved": {
           "type": "string",
@@ -202,6 +224,11 @@
           "items": {
             "$ref": "#/$defs/field"
           }
+        },
+        "clear_label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this register means when none of its bits is set, e.g. \"OK\". Only for a register carrying bits. Found missing by generating a 3SModbus library profile, whose bitwise decoder requires such a label and which the format could not supply (D16); a register map document needs it for the same reason."
         }
       }
     },
@@ -252,7 +279,7 @@
             "float64",
             "chars"
           ],
-          "description": "How the value is packed. A width wider than one register makes this register span the following addresses too."
+          "description": "How the value is packed. Required, and deliberately not derived from the property's range even though the narrowest fitting width is correct in 178 of 190 cases here: deriving it would let a range widened in the semantic document silently change the wire format, which is a protocol break with no diff in this file (D16). A width wider than one register makes this register span the following addresses too."
         },
         "bit": {
           "type": "integer",

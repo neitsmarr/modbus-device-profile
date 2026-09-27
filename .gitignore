@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 v/
+generated-library-profile.json

@@ -912,3 +912,64 @@ verified to fire:
 whether each is reserved, withdrawn or merely unassigned is a firmware fact. The
 `sections:` question from D13 is now easier -- a section is a run of registers in
 the map, so it belongs to the protocol document.
+
+## D16 — Correction to D15's wording; the register map carries only what cannot be derived
+
+**D15's wording was wrong, and the model it describes is right.** D15 said the
+property-to-register relation is many-to-many. No single mapping ever is: a
+property occupies one register or N consecutive ones, and a register carries one
+property or N bits of them, and the two never interleave. Each mapping is a tree,
+not a tangle. What is many-to-many is only the relation across the two *sets*.
+
+This matters because it bounds what `fields` has to express -- N:1 for bits and
+1:N for a wide encoding at one start address -- and that is exactly what it does.
+The defect D15 fixed was real; the sentence describing it was loose.
+
+**Register access was duplication, and I had written a checker for it.** Measured:
+the register-level `access` was identical to the access of the property it carried
+in **209 of 209** cases, and `validate.py` contained a check that the two *agreed*.
+That is precisely D1's anti-pattern -- two copies of one fact with a checker
+standing in for a single source -- committed inside the format built to avoid it.
+
+`access` is now derived from the properties a register carries. It may still be
+given, but only to **narrow**: a setting the device lets a local interface change
+while the bus exposes it read-only. Widening is an error. 209 lines removed; the
+register map went from 1246 lines to 1044.
+
+**Encoding stays explicit, and the measurement is why.** The obvious Modbus width
+is correct in 178 of 190 cases, which looks like an invitation to derive it. It is
+a trap: if encoding followed from `range`, then widening `[5.0, 25.0]` to
+`[-5.0, 25.0]` in the semantic document would silently flip the wire format from
+`uint16` to `int16` -- a protocol break with no diff in the protocol document. The
+12 exceptions are that case made visible: temperature setpoints declared `int16`
+though their present range is positive. Recorded in the schema so nobody
+"simplifies" it later.
+
+**"It looks like the JSON files I already have."** It does, because it describes
+the same thing -- and that is worth having rather than arguing about, so
+`generate_library_json.py` produces a 3SModbus DeviceLibrary profile from the two
+documents. It **validates clean against the library's own schemas, 0 errors**,
+reproducing their conventions exactly: `HR11 contains enabled` conditions,
+bitwise decoders with per-bit labels, two-entry dictionaries for booleans, and
+bytewise hex for versions.
+
+So the relationship is superset, not rivalry. The library format repeats the
+semantics into every register -- units, decoder ranges, defaults -- while these
+documents hold them once and reference them. Adoption does not require rewriting
+3SModbus or its 25 profiles: they can be generated.
+
+This is also the format's **first actual consumer**, and it earned its keep
+immediately by finding a missing field. The library's bitwise decoder requires a
+label for "no bit set", and nothing here carried one, so the generator had to
+invent "OK" nineteen times. `clear_label` now sits on each packed register --
+"OK", or "No measurands reported" for a capability word. A register map document
+needs it for exactly the same reason.
+
+**What still does not survive the conversion: 3.** Two internal properties, which
+have no register by definition, and one condition: heat recovery efficiency
+depends on three temperature sources being assigned, and the library's condition
+grammar is a single comparison. That is the honest measure of what the richer
+model buys -- not much for this device, and precisely the conjunction that D3
+will have to define.
+
+The generated file is a derived artifact and is gitignored, per D1.
