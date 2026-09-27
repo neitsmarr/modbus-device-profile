@@ -80,9 +80,19 @@ def main() -> int:
            lambda d: sig(d, "supply_fan_speed").update({"default": 0}))
     reject("measurement that is writable",
            lambda d: sig(d, "supply_fan_speed").update({"access": "read_write"}))
-    reject("two tables in one binding", lambda d: sig(d, "supply_fan_speed")["binding"].update({"holding": 5}))
-    reject("address above 65535", lambda d: sig(d, "supply_fan_speed")["binding"].update({"input": 70000}))
-    reject("bit without type bool", lambda d: sig(d, "supply_fan_speed")["binding"].update({"bit": 3}))
+    reject("binding with no address space", lambda d: sig(d, "supply_fan_speed")["binding"].pop("space"))
+    reject("binding with no address", lambda d: sig(d, "supply_fan_speed")["binding"].pop("address"))
+    reject("binding with no encoding", lambda d: sig(d, "supply_fan_speed")["binding"].pop("encoding"))
+    reject("unknown address space", lambda d: sig(d, "supply_fan_speed")["binding"].update({"space": "register"}))
+    reject("address above 65535", lambda d: sig(d, "supply_fan_speed")["binding"].update({"address": 70000}))
+    reject("a coil carrying a whole integer",
+           lambda d: sig(d, "ventilation_level")["binding"].update({"space": "coil"}))
+    reject("a discrete input given a bit index",
+           lambda d: sig(d, "error_memory_fault")["binding"].update({"space": "discrete", "bit": 2}))
+    reject("a non-bool carried as a single bit",
+           lambda d: sig(d, "supply_fan_speed")["binding"].update({"encoding": "bit", "bit": 3}))
+    reject("a register bit with no bit index",
+           lambda d: sig(d, "error_memory_fault")["binding"].pop("bit"))
     reject("function code not in Modbus", lambda d: d["access"]["supported_fc"].append(99))
     reject("max_read_words above the Modbus limit", lambda d: d["access"].update({"max_read_words": 200}))
 
@@ -98,8 +108,8 @@ def main() -> int:
            lambda d: sig(d, "client_enable").update({"labels": {"false": "disabled"}}))
     reject("bitfield on a property that is not a bit",
            lambda d: sig(d, "ventilation_level").update({"bitfield": "Some Register"}))
-    reject("a non-bool claiming a bit position",
-           lambda d: sig(d, "ventilation_level")["binding"].update({"bit": 2}))
+    reject("bitfield on a property in coil space",
+           lambda d: sig(d, "error_memory_fault")["binding"].update({"space": "coil"}))
     reject("scale on an enum",
            lambda d: sig(d, "operating_mode").update({"scale": 0.1}))
     reject("decimals on a bool",
@@ -148,13 +158,15 @@ def main() -> int:
     def bool_on_coil(d):
         d["signals"]["supply_fan_enable"] = {
             "title": "Supply Fan Enable", "kind": "setting", "type": "bool",
-            "binding": {"coil": 5, "encoding": "coil"}, "default": False,
+            "binding": {"space": "coil", "address": 5, "encoding": "bit"},
+            "default": False,
         }
 
     def bool_as_bit(d):
         d["signals"]["supply_fan_running"] = {
             "title": "Supply Fan Running", "kind": "measurement", "type": "bool",
-            "access": "read_only", "binding": {"input": 9, "encoding": "bit", "bit": 3},
+            "access": "read_only",
+            "binding": {"space": "discrete", "address": 9, "encoding": "bit"},
         }
 
     def real_as_float(d):
@@ -163,13 +175,15 @@ def main() -> int:
         s.pop("scale")
 
     accept("a bool on a coil", bool_on_coil)
-    accept("a bool as a bit in a register", bool_as_bit)
+    accept("a bool on a discrete input", bool_as_bit)
     accept("the same real carried as float32 instead of scaled int16", real_as_float)
     accept("storage declared wider than the range needs",
            lambda d: sig(d, "ventilation_level").update({"storage": "uint32"}))
     accept("hidden service register", lambda d: sig(d, "internal_voltage_3v3").update({"hidden": True}))
     accept("internal property with no binding (D8)",
            lambda d: sig(d, "ventilation_level").pop("binding"))
+    accept("the same address number reused in a different space",
+           lambda d: sig(d, "ventilation_level")["binding"].update({"space": "input"}))
     accept("an outcome keyed on a single error bit",
            lambda d: proc(d, "swap_air_chains")["outcome"].update(
                {"failure": {"signal": "error_memory_fault", "equals": True}}))

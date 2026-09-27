@@ -233,7 +233,7 @@ def reverse_index(doc) -> dict[str, set[str]]:
 # Which wire encodings can carry which semantic type (D10). The point of the
 # split is that this is a many-to-many table, not an identity.
 ENCODINGS_FOR = {
-    "bool":  {"coil", "discrete", "bit", "uint16", "int16"},
+    "bool":  {"bit", "uint16", "int16"},
     "int":   {"uint16", "int16", "uint32", "int32", "uint64", "int64"},
     "real":  {"float32", "float64", "uint16", "int16", "uint32", "int32"},
     "enum":  {"uint16", "uint32"},
@@ -356,10 +356,10 @@ def check_addresses(doc, rep: Report) -> None:
         binding = sig.get("binding")
         if not binding:
             continue
-        table = next((t for t in ("holding", "input", "coil", "discrete") if t in binding), None)
-        if table is None:
+        table = binding.get("space")
+        addr = binding.get("address")
+        if table is None or addr is None:
             continue
-        addr = binding[table]
         if "bit" in binding:
             key = (table, addr, binding["bit"])
             if key in bits:

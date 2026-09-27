@@ -109,18 +109,34 @@
     "binding": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Where the value lives. Exactly one of holding/input/coil/discrete names both the table and the address.",
-      "oneOf": [
-        { "required": ["holding"] },
-        { "required": ["input"] },
-        { "required": ["coil"] },
-        { "required": ["discrete"] }
+      "description": "Where the value lives: an address space, an address in it, and how the value is packed there.",
+      "required": ["space", "address", "encoding"],
+      "allOf": [
+        {
+          "description": "A coil or a discrete input IS a single bit, so the address already identifies it -- there is no bit index to give, and no other packing to choose.",
+          "if": {
+            "properties": { "space": { "enum": ["coil", "discrete"] } },
+            "required": ["space"]
+          },
+          "then": {
+            "properties": { "encoding": { "const": "bit" } },
+            "not": { "required": ["bit"] }
+          },
+          "else": {
+            "if": { "properties": { "encoding": { "const": "bit" } }, "required": ["encoding"] },
+            "then": {
+              "required": ["bit"],
+              "description": "A bool packed into a register needs to say which bit."
+            }
+          }
+        }
       ],
       "properties": {
-        "holding": { "$ref": "#/$defs/address" },
-        "input": { "$ref": "#/$defs/address" },
-        "coil": { "$ref": "#/$defs/address" },
-        "discrete": { "$ref": "#/$defs/address" },
+        "space": {
+          "description": "Which Modbus address space holds the value. These are separate address spaces, so the same address number in two of them is two different values.",
+          "enum": ["holding", "input", "coil", "discrete"]
+        },
+        "address": { "$ref": "#/$defs/address" },
         "encoding": {
           "$ref": "#/$defs/wire_encoding",
           "description": "How the value is packed into registers. This is a transport fact, not the value's type: the register span follows from the width (uint32 and float32 occupy two registers), and a scaled integer encoding carries a real."
@@ -139,9 +155,8 @@
         "word_order": { "enum": ["big", "little"], "description": "Overrides access.word_order for this binding." }
       },
       "dependentSchemas": {
-        "bit": {
-          "required": ["encoding"],
-          "properties": { "encoding": { "const": "bit" } }
+        "count": {
+          "properties": { "encoding": { "enum": ["chars", "uint16", "int16", "uint32", "int32", "float32"] } }
         }
       }
     },
@@ -149,8 +164,8 @@
     "address": { "type": "integer", "minimum": 0, "maximum": 65535 },
 
     "wire_encoding": {
-      "description": "How a value is packed into Modbus registers. Which of these is legal depends on the property's semantic type, and validate.py holds that compatibility table: 'coil' and 'discrete' and 'bit' carry a bool, an unsigned integer carries an enum or a flags word, and a real travels either as a float or as a scaled integer.",
-      "enum": ["coil", "discrete", "bit", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64", "chars"]
+      "description": "How a value is packed at its address. Which of these is legal depends on the property's semantic type, and validate.py holds that compatibility table: 'bit' carries a bool, an unsigned integer carries an enum, and a real travels either as a float or as a scaled integer. The address space is named separately by 'space' -- a coil and a discrete input are single bits by nature, so they take encoding 'bit'.",
+      "enum": ["bit", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float32", "float64", "chars"]
     },
 
     "presentation": {
@@ -197,7 +212,10 @@
             "required": ["type", "binding"],
             "properties": {
               "type": { "const": "bool" },
-              "binding": { "required": ["encoding", "bit"], "properties": { "encoding": { "const": "bit" } } }
+              "binding": {
+                "required": ["encoding", "bit"],
+                "properties": { "encoding": { "const": "bit" }, "space": { "enum": ["holding", "input"] } }
+              }
             }
           }
         },
@@ -249,8 +267,11 @@
           }
         },
         {
-          "description": "Only a bool may claim a bit position inside a register.",
-          "if": { "properties": { "binding": { "required": ["bit"] } }, "required": ["binding"] },
+          "description": "Only a bool is carried as a single bit, in any space.",
+          "if": {
+            "properties": { "binding": { "properties": { "encoding": { "const": "bit" } }, "required": ["encoding"] } },
+            "required": ["binding"]
+          },
           "then": { "properties": { "type": { "const": "bool" } }, "required": ["type"] }
         }
       ],

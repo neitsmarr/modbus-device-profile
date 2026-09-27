@@ -672,3 +672,37 @@ So the two cases are different and are modelled differently:
 character order within a register and whether trimming belongs in the profile at
 all are undecided. `display: version` describes the library's format but the
 profile does not say which byte is major and which minor.
+
+## D12 — A binding names its address space explicitly
+
+**Decided.** A binding is `{ space, address, encoding }`, all three required:
+
+    binding: { space: holding, address: 41, encoding: uint16 }
+    binding: { space: input, address: 1, encoding: bit, bit: 0 }
+
+Previously the address space was carried by *which key* held the address —
+`{ holding: 41 }` versus `{ input: 41 }`. That worked but made the space
+implicit in the document's shape rather than stated, with three costs:
+
+- the schema needed a four-branch `oneOf` over mutually exclusive keys, and
+  every per-space rule had to be written four times
+- every consumer had to probe four keys to discover the space before it could
+  do anything, including `validate.py`, which did exactly that
+- nothing forced an encoding to be present, because there was no single
+  required shape to hang it on
+
+With `space` as a value, the binding is one regular record. All 277 bindings
+were rewritten mechanically; the spaces in use are 130 holding and 147 input.
+
+**It also made a rule sayable that was previously awkward.** A coil and a
+discrete input *are* single bits, so the address already identifies the bit:
+in those spaces the encoding is `bit` and a `bit:` index is forbidden. In
+holding or input space, `encoding: bit` means a bool packed inside a register
+and the `bit:` index is required. `coil` and `discrete` are therefore no longer
+encodings — they were never packing formats, only places.
+
+**Address spaces are independent ranges.** The same number in two spaces is two
+different values, which the profile already relies on: `holding 1` is the slave
+address while `input 1` holds the error bits. D11's collision checks key on
+(space, address), so they catch a real clash inside one space without
+complaining about that.
