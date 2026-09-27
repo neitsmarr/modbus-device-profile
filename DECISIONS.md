@@ -120,3 +120,65 @@ preconditions already use — `any(channel[*].alarm_active)` — which implies t
 format models repeated channels, and it currently does not. The grammar must
 stay small and total, because the firmware X-macro target needs to evaluate it
 without a heap or a parser generator.
+
+## D4 — No channel dimension. Repetition, if any, is pre-expansion
+
+**Decided: channels are not a dimension of the data model.** There are no 2D
+signals, no per-channel scoping in expressions, no `any`/`all` quantifiers, no
+stride as a semantic concept. A signal is a signal, identified by one name.
+
+**Why not.** The device range is 1–2 channels for most products, 3–4 for some,
+fixed in every case; only the current product nests (2 ventilation lines ×
+3 channels, sensor per channel selected at runtime). A dimension would cost
+expression scoping and quantifiers — the bulk of D3's difficulty — to serve a
+handful of instances. Real devices also break the model it assumes: channel 1
+parked at a legacy address for backward compatibility, holding registers
+blocked while input registers interleave, and per-channel flags packed as bits
+of a single register, which a stride cannot express at all. And since every
+device profile is unique, a dimension earns nothing across profiles.
+
+**The real cost of going flat is not typing.** Measured on the current product,
+flat is 169 lines, 18 signals, 48 expression occurrences encoding 4 rules —
+twelve hand-maintained copies of each rule. That is survivable. What is not
+survivable is that *"channel 2" appears nowhere in a flat profile*, so nothing
+can check that a channel-2 signal references channel-2 siblings. See the trap
+below.
+
+**YAML anchors do not solve this, and are worse than writing it out.** An
+anchor can only share an identical subtree, but every instance's expressions
+name instance-specific siblings. Aliasing a `constraints` block from channel 1
+into channel 2 yields:
+
+    ch1:  when: sensor_type_supply_1 == co2
+    ch2:  when: sensor_type_supply_1 == co2    # aliased -- wrong channel
+
+`validate.py` passes this clean: `sensor_type_supply_1` is a real signal, so
+reference resolution and enum coverage both succeed. The device picks alarm
+limits from the wrong channel's sensor and nothing anywhere says so. No check
+can catch it without knowing which group a signal belongs to, which a flat
+profile does not record.
+
+So: anchors are fine for instance-independent values -- `enum` maps, `unit`,
+`scale`, `confirm` prose. They are forbidden for any subtree containing an
+expression. Worth a lint.
+
+**Consequence for repetition.** Hand-maintained flat is the default and is
+correct for 1–2 channel products. Where repetition is worth expressing, it goes
+in as a `repeat` block that expands to flat signals *in the loader, before the
+schema runs* -- not as a dimension. Substitution generates sibling names
+mechanically, which makes the anchor bug class unrepresentable, and expansion
+can emit a `group` / `index` label per signal, which is what makes a
+"references its own group" lint possible at all and lets the docs generator
+collapse 18 rows back into a formula.
+
+The cost stays in one function: docs, commissioning tool and the firmware
+X-macro all consume the expanded profile and need no changes, and D3's grammar
+is untouched because `$line` / `$n` are textual substitution, not scoping.
+Expansion must record provenance, or errors will point at generated names that
+appear in no file. It is opt-in per group: if two groups turn out to have
+different signal sets or irregular addresses, writing them out beats forcing
+them through one `repeat`.
+
+**Status.** The no-dimension half is decided. Whether to add `repeat` at all,
+or keep even the 2×3 product fully hand-written, is still open — pending a
+concrete syntax sketch to judge rather than argue about.
