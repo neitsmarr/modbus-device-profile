@@ -216,10 +216,24 @@ def main() -> int:
              {"space": "holding", "address": 4, "equals": 1, "in": [1, 2]})),
         ("reject", "an identification that identifies nothing", lambda d: d["identification"].clear()),
         ("reject", "an unknown device-id object",
-         lambda d: d["identification"]["report_device_id"].update({"serial_number": "x"})),
+         lambda d: d["identification"]["read_device_id"].update({"serial_number": "x"})),
         ("accept", "a probe matching a family of product ids",
          lambda d: d["identification"]["registers"].append(
              {"space": "holding", "address": 7, "in": [4010, 4011, 4012]})),
+
+        # ---- FC 43 / Read Device Identification
+        ("accept", "declaring FC 43 and FC 17 as supported",
+         lambda d: d["limits"].update({"supported_fc": [3, 4, 6, 16, 17, 43]})),
+        ("reject", "an unknown conformity level",
+         lambda d: d["identification"]["read_device_id"].update({"conformity_level": 4})),
+        ("accept", "extended conformity with individual object access",
+         lambda d: d["identification"]["read_device_id"].update({"conformity_level": 131})),
+        ("reject", "an FC 43 object that is not one of the defined ones",
+         lambda d: d["identification"]["read_device_id"].update({"user_application_name": "x"})),
+        ("reject", "an empty vendor name from FC 43",
+         lambda d: d["identification"]["read_device_id"].update({"vendor_name": ""})),
+        ("accept", "identification by FC 43 alone, with no register probe",
+         lambda d: d["identification"].pop("registers")),
     ])
 
     print()

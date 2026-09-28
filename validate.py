@@ -378,9 +378,53 @@ def check_identification(modbus_doc, rep: Report) -> None:
         if rng and rng[0] > rng[1]:
             rep.error(f"{where}: range [{rng[0]}, {rng[1]}] is empty")
 
-    if not ident.get("registers") and not ident.get("report_device_id"):
+    if not ident.get("registers") and not ident.get("read_device_id"):
         rep.error("identification: neither a register probe nor a device-id expectation, so it "
                   "identifies nothing")
+
+    # The first thing in this document that reads `limits` rather than merely
+    # declaring it. Expecting FC 43 objects from a device that does not answer
+    # FC 43 is a profile that can never identify anything.
+    supported = set((modbus_doc.get("limits") or {}).get("supported_fc") or [])
+    if ident.get("read_device_id") and 43 not in supported:
+        rep.error("identification/read_device_id: expects Read Device Identification objects, but "
+                  "limits.supported_fc does not include 43, so the call would be rejected")
+    if 43 in supported and not ident.get("read_device_id"):
+        rep.warn("identification: the device answers FC 43, which identifies it without presuming "
+                 "any register map, but no read_device_id objects are stated to match against")
+
+
+def check_documentation(modbus_doc, rep: Report) -> None:
+    """D18: a register with no prose generates a documentation row with a blank.
+
+    Reserved ranges are exempt -- `reserved` already says why they carry
+    nothing, and a range has no name to give. A field needs its own title only
+    where the register carries more than one, since a lone field's name and its
+    register's are the same name.
+    """
+    missing_title, missing_desc, missing_field_title = [], [], []
+    for i, reg in enumerate(modbus_doc.get("registers") or []):
+        if "reserved" in reg:
+            continue
+        fields = reg.get("fields") or []
+        at = f"registers/{i}"
+        if "title" not in reg:
+            missing_title.append(at)
+        if "description" not in reg:
+            missing_desc.append(at)
+        if len(fields) > 1:
+            for j, f in enumerate(fields):
+                if "title" not in f:
+                    missing_field_title.append(f"{at}/fields/{j}")
+
+    for label, items in (("title", missing_title),
+                         ("description", missing_desc),
+                         ("field title", missing_field_title)):
+        if items:
+            shown = ", ".join(items[:3])
+            more = f" and {len(items) - 3} more" if len(items) > 3 else ""
+            rep.warn(f"documentation: {len(items)} of these need a {label} before this map can "
+                     f"generate a register table ({shown}{more}) -- D18")
 
 
 def check_agreement(props_doc, modbus_doc, rep: Report):
@@ -531,6 +575,7 @@ def main(argv: list[str]) -> int:
     check_references(props_doc, rep)
     check_addressing(modbus_doc, rep)
     check_identification(modbus_doc, rep)
+    check_documentation(modbus_doc, rep)
     encodings, _ = check_agreement(props_doc, modbus_doc, rep)
     check_storage(props_doc, encodings, rep)
     index = reverse_index(props_doc)

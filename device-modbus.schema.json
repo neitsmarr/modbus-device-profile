@@ -111,7 +111,7 @@
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
-      "description": "How a client decides that the device answering at some address is this device, and so that this profile applies. A bus scan finds an address, not a product: without this, choosing a profile is left to whoever is holding the laptop. Every rule given must hold, so a profile matching nothing is safer than one matching the wrong device.",
+      "description": "How a client decides that the device answering at some address is this device, and so that this profile applies. A bus scan finds an address, not a product: without this, choosing a profile is left to whoever is holding the laptop. Every rule given must hold, so a profile matching nothing is safer than one matching the wrong device. Where a device implements Read Device Identification (FC 43), that is the cheapest and safest first probe, and register probes narrow it further or stand in for it entirely where it is absent.",
       "properties": {
         "registers": {
           "type": "array",
@@ -222,31 +222,47 @@
           },
           "description": "Register reads that must all match, cheapest and most discriminating first. A client may stop at the first mismatch."
         },
-        "report_device_id": {
+        "read_device_id": {
           "type": "object",
           "additionalProperties": false,
           "minProperties": 1,
-          "description": "Expected objects from Report Server ID / Read Device Identification (FC 43, MEI type 14), for the devices that implement it. The standard way to ask a Modbus device what it is, and the only one that needs no prior knowledge of its map -- so it is worth stating where available, even though FC 43 is optional and many devices omit it. Strings are compared exactly, after trimming surrounding whitespace.",
+          "description": "Expected objects from Read Device Identification -- function code 43 with MEI type 14 -- for a device that implements it. This is the only way to ask a Modbus device what it is without already knowing its register map, which makes it the right first probe wherever it is available: it cannot misread a reserved address on a stranger's device the way a register probe can. It is optional in Modbus and widely unimplemented, which is why register probes stand alongside it rather than being replaced by it. Requires 43 in limits.supported_fc. Strings are compared after trimming surrounding whitespace; a device may pad them.",
           "properties": {
             "vendor_name": {
               "type": "string",
-              "description": "Object 0x00."
+              "minLength": 1,
+              "description": "Object 0x00, the only object a conformity level 1 device must return besides product code and revision."
             },
             "product_code": {
               "type": "string",
-              "description": "Object 0x01."
+              "minLength": 1,
+              "description": "Object 0x01. Usually the most discriminating of the three basic objects."
             },
             "major_minor_revision": {
               "type": "string",
-              "description": "Object 0x02."
+              "minLength": 1,
+              "description": "Object 0x02, the firmware revision as the device reports it -- free-form text, not necessarily matching device.firmware_version."
             },
             "product_name": {
               "type": "string",
-              "description": "Object 0x04."
+              "minLength": 1,
+              "description": "Object 0x04, regular identification. Absent on a conformity level 1 device."
             },
             "model_name": {
               "type": "string",
-              "description": "Object 0x05."
+              "minLength": 1,
+              "description": "Object 0x05, regular identification."
+            },
+            "conformity_level": {
+              "enum": [
+                1,
+                2,
+                3,
+                129,
+                130,
+                131
+              ],
+              "description": "What the device returns for MEI 14, as reported in the response: 1 basic, 2 regular, 3 extended, and 0x81-0x83 for the same levels with individual object access. Stating it tells a client which objects it may ask for, and whether it may request one by id instead of the whole stream."
             }
           }
         }
@@ -272,9 +288,12 @@
               6,
               15,
               16,
-              23
+              17,
+              23,
+              43
             ]
-          }
+          },
+          "description": "Function codes this device answers. 17 is Report Server ID and 43 is Read Device Identification (with MEI type 14) -- both are identification rather than data access, both are optional in Modbus, and 43 is the one identification.read_device_id relies on, so it has to be declarable here or a profile can expect a call the device never claimed to support."
         },
         "max_read_words": {
           "type": "integer",

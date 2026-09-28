@@ -1096,3 +1096,120 @@ before any other fact in the file can be trusted.
 exclusive is checkable, and cannot be checked from inside one document — it
 needs a library of them. That is the right check to add when there is a
 directory of profiles rather than one.
+
+## D18 — Every register carries its own title and description, because nothing else can
+
+**Asked directly: is it written down anywhere that a register needs a
+description in order to generate documentation?** It was not. This entry is
+that rule.
+
+What existed instead was an accident. D13 settled where prose lives and gave
+the right reason -- a generator cannot read a YAML comment, so prose a reader
+of the documentation needs may not live in one -- but it answered for
+*properties*, and for packed registers through the `bitfields:` mechanism that
+D15 then deleted. D15 listed "register title, description and access had no
+owner" as a symptom motivating registers-as-entities, which is a diagnosis of
+the old design rather than a rule for the new one. D16 revisited `access` and
+removed it as derivable, and never came back to prose. D17 made the document
+standalone and did not mention it either.
+
+The schema recorded the accident faithfully: `title` was required only on a
+register carrying two or more properties, on the reasoning that a lone field
+lends its own; `description` was required nowhere at all.
+
+**Measured, which shows it was convention and not design:** of 209 registers,
+19 carry a description and 19 carry a title -- exactly the 19 packed registers
+the schema forced a title onto. All 190 single-field registers carry neither.
+87 bit fields carry no title either.
+
+**Rule.** A register that carries anything declares a `title` and a
+`description`. Where it carries more than one field, every field declares a
+`title` as well. A reserved range is exempt: `reserved` already says why it
+carries nothing, and a range has no name to give.
+
+**Why it cannot be derived, borrowed or defaulted.** The previous answer was
+that a single-field register borrows both from the property it carries. That
+answer died with D17: this document has to describe a third-party device, where
+there is no semantic document to borrow from and no firmware source to read.
+The register map is then the *sole* input to generated documentation, and a
+register with no prose produces a table row with an address, an encoding, and a
+blank column where the explanation goes. Nothing derives prose. Nothing else
+can hold it.
+
+This is not the duplication D1 and D16 warn about. Duplication is the same fact
+in two places with nothing keeping them equal. A register's name and purpose in
+the protocol document is not a copy of anything -- when a semantic layer also
+exists it holds a different fact, what the value *means*, which is why the two
+documents were split in the first place (D15). Where the strings do coincide,
+that coincidence belongs to the generator that emits one from the other, not to
+the format.
+
+**Cost, and it is the largest of any rule here.** 190 registers and 87 fields
+need prose written before this map is documentation-complete. That prose is a
+device fact, so only the firmware author can supply most of it, and inventing
+190 restatements of the identifier -- "Supply Channel 1 Carbon Dioxide Alert 1
+Level" described as "supply channel 1 carbon dioxide alert 1 level" -- would be
+worse than the gap, because it would satisfy the check while telling a reader
+nothing and hiding the 190 real omissions behind 190 apparent successes.
+
+**So the rule is a validator warning, not a schema requirement, and that is
+deliberate.** Putting it in the schema would make `device-modbus.yaml` fail its
+own schema, which in turn breaks the baseline assertion in `test_schema.py` --
+the check that the schema describes the real document rather than an aspiration.
+A rule whose only effect is to make the flagship document invalid is not
+enforcement, it is a broken build. `validate.py` instead reports the three
+counts on every run, so the gap is visible and quantified rather than implicit.
+It becomes a schema requirement when the count reaches zero, and that step is
+mechanical once the prose exists.
+
+**What this closes.** Nothing in section A or B of PROTOCOL-GAPS.md -- this is a
+gap the audit missed, because the audit asked what a *client* needs to talk to
+the device and this is what a *reader* needs to understand it.
+
+## D19 — FC 43 is declarable, and identification prefers it
+
+**Rule.** `limits.supported_fc` accepts 17 and 43, and
+`identification.read_device_id` states the objects a device returns from Read
+Device Identification -- function code 43 with MEI type 14 -- along with its
+conformity level.
+
+**The inconsistency that prompted it.** D17 added the FC 43 expectations but not
+the ability to declare FC 43, whose enum held only the data-access codes
+`[1, 2, 3, 4, 5, 6, 15, 16, 23]`. So the AHU profile stated what FC 43 should
+return while declaring a device that does not answer FC 43 -- a profile that
+could never identify anything. `validate.py` now rejects exactly that pair, and
+warns on the opposite one: a device declaring 43 with no objects stated to match
+against is an identification path left on the floor.
+
+That check is also the first thing in this repository that *reads* `limits`
+rather than merely declaring it, which is the defect PROTOCOL-GAPS.md A3 names.
+A3 is not closed -- `max_read_words`, `gaps_readable` and `turnaround_ms` are
+still consumed by nothing -- but the block is no longer entirely decorative.
+
+**Why FC 43 goes first, ahead of the register probes.** It is the only way to
+ask a Modbus device what it is without already knowing its register map. A
+register probe on an unidentified device reads an address chosen from *this*
+profile, which on some other vendor's product may be reserved, absent, or
+meaningful in a way that coincidentally matches. FC 43 cannot make that mistake:
+the question is about identity, not about an address. So where a device answers
+it, it is both cheaper and safer, and the register probes narrow the result.
+
+**Why it is not the only mechanism.** FC 43 is optional in Modbus and widely
+unimplemented -- the second real device in front of this format, the DSCDG3-4
+duct sensor, identifies itself through a device-type holding register and
+nothing else. A format that required FC 43 would describe a minority of the
+devices it is meant to cover. Hence both, with `identification` requiring at
+least one and accepting either alone.
+
+`conformity_level` is stated because it tells a client which objects it may ask
+for at all -- a level 1 device returns only vendor name, product code and
+revision -- and whether individual objects may be requested by id rather than
+streamed. Getting that wrong turns a safe identification call into an exception.
+
+**Naming correction.** D17 called this block `report_device_id` and its prose
+conflated two different function codes: 17 is Report Server ID, a serial-line
+call returning a vendor-defined blob, while 43/14 is Read Device Identification
+with the numbered object list this block actually describes. The block is now
+`read_device_id` and describes only FC 43. 17 remains declarable in
+`supported_fc`, since a device may answer it, but nothing here matches on its
+contents: its payload is vendor-defined, so there is no portable way to.

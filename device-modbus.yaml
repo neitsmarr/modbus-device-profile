@@ -33,6 +33,8 @@
 #     currently unaccounted for
 #   - the identification rules below assume device_type reads 4010 and that
 #     firmware 1.x packs major/minor as one byte each
+#   - FC 43 support, and its conformity level, are assumed rather than
+#     confirmed; a device that omits it is identified by the register probes
 
 device:
   vendor: "3S"
@@ -54,16 +56,22 @@ addressing:
 # device. Read-only, and every rule must hold; a rule that cannot be read at
 # all counts as a mismatch, because the thing being probed may be some other
 # vendor's product entirely.
+# Read Device Identification (FC 43, MEI 14) first where it answers: it asks
+# the device what it is without presuming any register map, so it cannot
+# misread a reserved address on some other vendor's product. The register
+# probes then narrow it -- and stand in for it entirely on the many devices
+# that do not implement FC 43.
 identification:
+  read_device_id:
+    vendor_name: "3S"
+    product_code: "AHU-1"
+    conformity_level: 1
   registers:
     - { space: holding, address: 4, equals: 4010 }     # device_type
     - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }  # firmware major 1
-  report_device_id:
-    vendor_name: "3S"
-    product_code: "AHU-1"
 
 limits:
-  supported_fc: [3, 4, 6, 16]
+  supported_fc: [3, 4, 6, 16, 43]
   max_read_words: 32
   max_write_words: 16
   gaps_readable: true

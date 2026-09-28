@@ -10,7 +10,14 @@ that was actually run. Findings are split by who can close them — a format
 defect I can fix, or a firmware fact only the device author knows.
 
 **Status.** A1, A2 and A4 are closed by D17, which also added `identification:`
-for device detection. A3, A5, A6, A7 and all of section B are still open.
+for device detection; A5 went with them. D19 made FC 43 declarable and gave
+`limits` its first reader, which does not close A3 but ends its decorativeness.
+A3, A6, A7 and all of section B are still open.
+
+This audit also **missed one**, recorded as D18: no register carried a title or
+a description except the 19 the schema forced, because the audit asked what a
+client needs in order to talk to the device and never what a reader needs in
+order to understand it. 190 registers and 87 bit fields are short of prose.
 
 Evidence is from the AHU map (209 registers) and from a second real device,
 `DSCDG3-4` (a duct sensor, 33 input + 43 holding registers), whose
@@ -122,6 +129,8 @@ version range this map is valid for, and a layer-3 check that it agrees with
 the properties document.
 
 ### A5. `count` is accepted on encodings that cannot have a count
+
+**CLOSED by D17.**
 
 Probe: `{ property: …, encoding: uint16, count: 4 }` is accepted by the schema.
 It only produced an error incidentally, by colliding with the next register's
