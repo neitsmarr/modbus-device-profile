@@ -131,7 +131,11 @@ def main() -> int:
         ("reject", "register without a space", lambda d: d["registers"][0].pop("space")),
         ("reject", "unknown address space", lambda d: d["registers"][0].update({"space": "register"})),
         ("reject", "register with neither address nor reserved range", lambda d: d["registers"][0].pop("address")),
-        ("reject", "address above 65535", lambda d: d["registers"][0].update({"address": 70000})),
+        # An address merely past the end of its space is now a validate.py error
+        # rather than a schema one: the window depends on addressing[space], and
+        # a schema cannot see a sibling section. What stays here is the absurd.
+        ("reject", "an address no numbering scheme could reach",
+         lambda d: d["registers"][0].update({"address": 2_000_000})),
         ("reject", "register carrying nothing and not reserved", lambda d: d["registers"][0].pop("fields")),
         ("reject", "reserved range that also carries fields",
          lambda d: d["registers"].append({"space": "holding", "from": 7, "to": 8,
@@ -163,14 +167,25 @@ def main() -> int:
          lambda d: d["registers"].append({"space": "input", "address": 610, "title": "Serial Number",
                                           "fields": [{"property": "serial_number",
                                                       "encoding": "chars", "count": 8}]})),
-        # ---- A1: the addressing base
+        # ---- A1: per-space addressing bases
         ("reject", "no addressing section", lambda d: d.pop("addressing")),
-        ("reject", "addressing with no base", lambda d: d["addressing"].pop("base")),
-        ("reject", "a base that is neither convention", lambda d: d["addressing"].update({"base": "one"})),
-        ("reject", "a base override on something that is not a space",
-         lambda d: d["addressing"].update({"base_overrides": {"register": "pdu"}})),
+        ("reject", "an empty addressing section", lambda d: d.update({"addressing": {}})),
+        ("reject", "a base on something that is not an address space",
+         lambda d: d["addressing"].update({"registers": 1})),
+        ("reject", "a base that is not a number",
+         lambda d: d["addressing"].update({"holding": "data_model"})),
+        ("reject", "a negative base", lambda d: d["addressing"].update({"holding": -1})),
+        ("accept", "raw wire offsets", lambda d: d["addressing"].update({"holding": 0})),
         ("accept", "a space numbered differently from the rest",
-         lambda d: d["addressing"].update({"base_overrides": {"input": "pdu"}})),
+         lambda d: d["addressing"].update({"input": 0})),
+        ("accept", "legacy Modicon numbering, transcribed as printed",
+         lambda d: (d["addressing"].update({"holding": 40001}),
+                    [r.update({"address": r["address"] + 40000})
+                     for r in d["registers"] if r["space"] == "holding" and "address" in r],
+                    [r.update({"from": r["from"] + 40000, "to": r["to"] + 40000})
+                     for r in d["registers"] if r["space"] == "holding" and "from" in r],
+                    [p.update({"address": p["address"] + 40000})
+                     for p in d["identification"]["registers"] if p["space"] == "holding"])),
 
         # ---- A2: a coil is a single bit
         ("accept", "a coil carrying one bit-encoded property",

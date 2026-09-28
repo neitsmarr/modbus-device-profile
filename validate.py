@@ -322,34 +322,50 @@ def check_reread_dependents(doc, index, rep: Report) -> None:
 
 
 # ------------------------------------------------------------------ layer 3
-def base_of(modbus_doc, space: str) -> str:
-    """Which numbering `space` uses: the document's base, unless overridden."""
-    addressing = modbus_doc.get("addressing") or {}
-    return (addressing.get("base_overrides") or {}).get(space, addressing.get("base"))
+def base_of(modbus_doc, space: str):
+    """The address this document would write for wire offset 0 in `space`."""
+    return (modbus_doc.get("addressing") or {}).get(space)
+
+
+def wire_offset(modbus_doc, space: str, address: int):
+    """What actually travels in the request. None if the space declares no base."""
+    base = base_of(modbus_doc, space)
+    return None if base is None else address - base
 
 
 def check_addressing(modbus_doc, rep: Report) -> None:
-    """A1/A2: what the declared base implies, which a schema cannot see.
+    """A1: what the declared bases imply, which a schema cannot see.
 
-    The bounds of a legal address depend on a sibling section, and so does the
-    wire offset every consumer computes -- so both live here rather than in the
-    schema. A2's coil and discrete rules are in the schema, since they are
-    local to one register; what is left for this layer is the address itself.
+    A space used by the map has to declare a base, and every address has to fall
+    in the one window that base allows -- both need a sibling section, so both
+    live here. A2's coil and discrete rules are in the schema instead, being
+    local to one register.
     """
-    LIMITS = {"pdu": (0, 65535), "data_model": (1, 65536)}
+    addressing = modbus_doc.get("addressing") or {}
+    used = {reg.get("space") for reg in modbus_doc.get("registers") or []}
+    used |= {p.get("space") for p in
+             ((modbus_doc.get("identification") or {}).get("registers") or [])}
+
+    for space in sorted(s for s in used if s):
+        if space not in addressing:
+            rep.error(f"addressing: the map uses the {space} space but does not say which address "
+                      f"there means wire offset 0, so every {space} address is ambiguous")
+    for space in sorted(addressing):
+        if space not in used:
+            rep.warn(f"addressing/{space}: declared but no {space} address appears anywhere")
+
     for i, reg in enumerate(modbus_doc.get("registers") or []):
-        space = reg.get("space")
-        base = base_of(modbus_doc, space)
-        if base not in LIMITS:
+        base = base_of(modbus_doc, reg.get("space"))
+        if base is None:
             continue
-        lo, hi = LIMITS[base]
+        lo, hi = base, base + 0xFFFF
         for key in ("address", "from", "to"):
             if key not in reg:
                 continue
             addr = reg[key]
             if not lo <= addr <= hi:
-                rep.error(f"registers/{i}/{key}: {addr} is outside {lo}..{hi}, the legal range "
-                          f"for a '{base}' address")
+                rep.error(f"registers/{i}/{key}: {addr} is outside {lo}..{hi} -- with a base of "
+                          f"{base} it would be wire offset {addr - base}, and only 0..65535 exists")
         if "from" in reg and "to" in reg and reg["to"] < reg["from"]:
             rep.error(f"registers/{i}: reserved range ends ({reg['to']}) before it starts "
                       f"({reg['from']})")

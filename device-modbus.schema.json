@@ -62,48 +62,32 @@
     "addressing": {
       "type": "object",
       "additionalProperties": false,
-      "description": "What the 'address' numbers in this file count from. Required, and the single most consequential fact in the document: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff to show it. Modbus itself numbers the wire offset from 0 while nearly every datasheet prints register numbers from 1, so neither convention can be assumed.",
-      "required": [
-        "base"
-      ],
+      "minProperties": 1,
+      "description": "For each address space this map uses, the address that corresponds to wire offset 0. Every `address` in this document is then read as: offset = address - addressing[space]. Required, and the single most consequential fact in the file -- an off-by-one here is wrong in the documentation, the commissioning tool and the firmware simultaneously, with no diff anywhere to show it. Modbus numbers the wire offset from 0 while nearly every datasheet prints register numbers from 1, so neither can be assumed. Give 1 for datasheet numbering, 0 to write raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. A space that appears in `registers` has to appear here; validate.py checks that, since a schema cannot see a sibling section. Keys are the `space` values themselves so a consumer can look one up as addressing[register.space] with no table in between -- and because a coil is not a register, so spelling these '..._registers' would be wrong for half of them.",
       "properties": {
-        "base": {
-          "enum": [
-            "pdu",
-            "data_model"
-          ],
-          "description": "'pdu' means an address IS the offset that travels in the request, counted from 0. 'data_model' means an address is the register number a datasheet prints, counted from 1, and the wire offset is address - 1. Legacy 4xxxx / 3xxxx numbering is data_model with the space prefix dropped: holding register 40001 is address 1 in the holding space."
+        "holding": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999,
+          "description": "The holding address this file would write for wire offset 0."
         },
-        "base_overrides": {
-          "type": "object",
-          "additionalProperties": false,
-          "description": "For the devices whose datasheet numbers one space differently from another. Rare, and worth stating rather than silently renumbering a transcribed map.",
-          "properties": {
-            "holding": {
-              "enum": [
-                "pdu",
-                "data_model"
-              ]
-            },
-            "input": {
-              "enum": [
-                "pdu",
-                "data_model"
-              ]
-            },
-            "coil": {
-              "enum": [
-                "pdu",
-                "data_model"
-              ]
-            },
-            "discrete": {
-              "enum": [
-                "pdu",
-                "data_model"
-              ]
-            }
-          }
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999,
+          "description": "The input address this file would write for wire offset 0."
+        },
+        "coil": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999,
+          "description": "The coil address this file would write for wire offset 0."
+        },
+        "discrete": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999999,
+          "description": "The discrete address this file would write for wire offset 0."
         }
       }
     },
@@ -389,8 +373,8 @@
     "address": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 65536,
-      "description": "Counted as addressing.base says. The exact bounds follow from the base -- 0..65535 for 'pdu', 1..65536 for 'data_model' -- and validate.py enforces them, since a schema cannot see a sibling section."
+      "maximum": 1065535,
+      "description": "An address in the numbering its space declares in `addressing`. The wire offset is address - addressing[space], and the legal window is therefore addressing[space] .. addressing[space] + 65535, which validate.py enforces -- a schema cannot see a sibling section. The bound here is merely generous enough for six-digit Modicon numbering."
     },
     "register": {
       "type": "object",

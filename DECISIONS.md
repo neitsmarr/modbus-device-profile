@@ -1372,3 +1372,58 @@ Three consequences, all simplifications:
 **Cost.** D20 shipped and was pushed, so this is a format change rather than an
 edit in progress; anything written against it needs `title` renamed to `name`
 and `raised_by` deleted. At one profile, that is two minutes.
+
+## D22 — Correction to D17: the addressing base is a number per space, not a named convention
+
+**Rule.**
+
+    addressing:
+      holding: 1
+      input: 1
+
+Each entry is the address this document would write for **wire offset 0** in
+that space. Every address in the file is then read as
+`offset = address - addressing[space]`.
+
+**D17's enum is gone.** It offered `base: pdu | data_model`, plus a
+`base_overrides` map for a device numbering one space differently. That was two
+mechanisms and a private vocabulary to express one integer, and the vocabulary
+had to be learned before the file could be read.
+
+**The number is strictly more capable, which is the part worth recording.** The
+enum could say 0 or 1 and nothing else. Legacy Modicon numbering — holding
+register 40001, input register 30001 — was expressible under D17 only by
+instructing the author to strip the prefix and write `data_model`, so a
+transcribed map silently differed from the datasheet it was copied from. Now
+`holding: 40001` states it, addresses are written exactly as printed, and the
+offsets come out right. A simplification that also removes a restriction is rare
+enough to note.
+
+**Keys are the `space` values themselves**, not `holding_registers` /
+`input_registers`. Two reasons. A consumer resolves `addressing[register.space]`
+with no mapping table in between, and the four words are already the format's
+vocabulary in `space:`. And a coil is not a register — it is one bit — so
+`coil_registers` would be wrong for half the spaces the format supports.
+
+**What moved between the layers.** The legal window is now
+`base .. base + 0xFFFF`, which depends on a sibling section, so the schema keeps
+only a generous bound — enough for six-digit numbering — and `validate.py`
+enforces the real one. That reclassified one existing test: "address above
+65535" was a schema rejection and is now a validator error, so the schema case
+was rewritten to reject an address no numbering scheme could reach, and the
+window itself is checked where it can be. Two new checks come with it: a space
+the map uses must declare a base, and a base declared for a space nothing uses
+is a warning.
+
+**It also fixed a live bug in the generator.** `generate_library_json.py`
+emitted `"number": reg["address"]`, copying our address straight into the
+library's 1-based register number. That is only correct when the base happens to
+be 1. It now computes `address - base + 1`, so a profile written with raw
+offsets or legacy numbering converts correctly. The output is unchanged for this
+device, which is exactly why the bug survived D17 unnoticed: the one profile in
+hand could not distinguish the two.
+
+**Cost.** Another format change to something already pushed, and the third
+revision of this section in as many days. The direction has been consistent
+though — D17 stated the fact, D22 states it as data rather than as a word — and
+the AHU edit was two lines.

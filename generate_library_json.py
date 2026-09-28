@@ -165,7 +165,11 @@ def main(argv):
             continue
         sig = props[fields[0]["property"]]
         name = reg.get("title") or sig["title"]
-        entry = {"number": reg["address"], "name": name,
+        # The library numbers registers from 1, so go via the wire offset rather
+        # than copying our address across: the two only coincide when this
+        # document happens to declare a base of 1 (D22).
+        base = modbus_doc["addressing"][reg["space"]]
+        entry = {"number": reg["address"] - base + 1, "name": name,
                  "decoder": decoder_for(reg, fields, props, unsupported)}
 
         if len(fields) == 1 and "bit" not in fields[0]:

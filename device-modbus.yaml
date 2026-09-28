@@ -47,13 +47,14 @@ device:
   firmware_version:
     from: "1.0"               # no 'to': this map holds for 1.0 and later
 
-# What the `address:` numbers below count from. Every address here is a
-# register number as a datasheet prints it, so the wire offset is address - 1:
-# holding 1 is read with FC3 at offset 0. Stating this is the whole point --
-# the same file read under the other convention is silently off by one
-# everywhere.
+# For each space used below, the address that would be written here for wire
+# offset 0. So offset = address - addressing[space]: holding 1 is read with FC3
+# at offset 0. Stating it is the whole point -- the same file read under the
+# other convention is silently off by one everywhere. Write 0 to use raw
+# offsets, or 40001 / 30001 to transcribe a legacy map exactly as printed.
 addressing:
-  base: data_model
+  holding: 1
+  input: 1
 
 # How a client confirms that whatever answered at some slave address is this
 # device. Read-only, and every rule must hold; a rule that cannot be read at all
