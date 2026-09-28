@@ -66,7 +66,7 @@ def numerical(sig):
 def decoder_for(space, reg, fields, props, unsupported):
     """A library decoder for one register."""
     if any("bit" in f for f in fields):
-        bits = [{"index": f["bit"], "label": bit_label(props[f["property"]]["title"])}
+        bits = [{"index": f["bit"], "label": bit_label(f.get("title") or f["property"])}
                 for f in sorted(fields, key=lambda f: f["bit"])]
         clear = reg.get("clear_label")
         if not clear:
@@ -118,7 +118,7 @@ def condition_for(sig, addr_of, props, unsupported, name):
         if ref in addr_of and props.get(ref, {}).get("type") == "bool":
             space, addr = addr_of[ref]
             tag = "IR" if space == "input" else "HR"
-            label = bit_label(props[ref]["title"])
+            label = bit_label(props[ref].get("title") or ref)
             op = "!contains" if negated else "contains"
             return f"{tag}{addr} {op} {label}"
         unsupported.append(f"{name}: bare condition '{expr}' has no register to test")
@@ -140,10 +140,15 @@ def condition_for(sig, addr_of, props, unsupported, name):
 
 
 def main(argv):
-    props_doc = load(HERE / "device-properties.yaml")
     modbus_doc = load(HERE / "device-modbus.yaml")
-    props = props_doc["properties"]
-    dev = props_doc["device"]
+    dev = modbus_doc["device"]
+
+    # Since D21 a field carries its own meaning, so the lookup the semantic
+    # document used to provide is built from the map itself.
+    props = {f["property"]: f
+             for block in modbus_doc["spaces"].values()
+             for reg in block["registers"]
+             for f in reg.get("fields") or []}
 
     # Spaces are containers (D20), so walk them rather than one flat list.
     registers = [(space, block["base"], reg)
@@ -156,10 +161,10 @@ def main(argv):
             addr_of[f["property"]] = (space, reg["address"])
 
     unsupported: list[str] = []
-    out = {"deviceName": dev["name"],
+    out = {"deviceName": dev["model"],
            "deviceDescription": dev.get("description", ""),
            "deviceType": dev["type"],
-           "firmwareVersion": dev["firmware_version"],
+           "firmwareVersion": dev["firmware_version"]["from"],
            "inputRegisters": [], "holdingRegisters": []}
 
     for space, base, reg in registers:
@@ -168,8 +173,8 @@ def main(argv):
             unsupported.append(f"{space} {reg.get('from')}..{reg.get('to')}: "
                                f"reserved range has no representation in the library format")
             continue
-        sig = props[fields[0]["property"]]
-        name = reg.get("title") or sig["title"]
+        sig = fields[0]
+        name = reg.get("title") or sig.get("title") or sig["property"]
         # The library numbers registers from 1, so go via the wire offset rather
         # than copying our address across: the two only coincide when the space
         # happens to declare a base of 1 (D17).
@@ -184,7 +189,7 @@ def main(argv):
             if space == "holding":
                 if "default" in sig:
                     entry["default"] = str(sig["default"])
-                acc = reg.get("access") or sig.get("access", "read_write")
+                acc = reg.get("access", "read_write")
                 if acc != "read_write":
                     entry["access"] = ACCESS_OUT[acc]
             cond = condition_for(sig, addr_of, props, unsupported, fields[0]["property"])
@@ -193,10 +198,6 @@ def main(argv):
 
         key = "inputRegisters" if space == "input" else "holdingRegisters"
         out[key].append(entry)
-
-    for name, sig in props.items():
-        if sig.get("internal"):
-            unsupported.append(f"{name}: internal property, absent from a register map")
 
     dest = pathlib.Path(argv[1]) if len(argv) > 1 else HERE / "generated-library-profile.json"
     io.open(dest, "w", encoding="utf-8", newline="\n").write(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Negative tests for both schemas.
+"""Negative tests for the register map schema.
 
 A schema that accepts everything passes the happy path too, so the only way to
 know these are doing work is to mutate known-good documents and check each
@@ -57,72 +57,12 @@ def main() -> int:
             if not ok:
                 failures.append(f"{doc_name} {expect}: {name}")
 
-    # ------------------------------------------------------------ properties
-    p = lambda d, n: d["properties"][n]
-    proc = lambda d, n: d["procedures"][n]
-
-    def use_variants(d):
-        s = p(d, "supply_ch1_voc_level")
-        for k in ("unit", "scale", "range", "decimals"):
-            s.pop(k, None)
-        s["variants"] = [
-            {"effective_when": "operating_mode == manual", "unit": "index"},
-            {"effective_when": "operating_mode == automatic", "unit": "ppb"},
-        ]
-
-    suite("device-properties.yaml", "device-properties.schema.json", [
-        ("reject", "missing device section", lambda d: d.pop("device")),
-        ("reject", "device without firmware_version", lambda d: d["device"].pop("firmware_version")),
-        ("reject", "firmware_version not major.minor", lambda d: d["device"].update({"firmware_version": "v1"})),
-        ("reject", "an address leaking into the semantic document",
-         lambda d: p(d, "ventilation_level").update({"binding": {"space": "holding", "address": 23}})),
-        ("reject", "misspelled key (writeable_when)", lambda d: p(d, "ventilation_level").update({"writeable_when": "x"})),
-        ("reject", "unknown top-level section", lambda d: d.update({"signals": {}})),
-        ("reject", "CamelCase property name", lambda d: d["properties"].update({"FanSpeed": p(d, "supply_fan_speed")})),
-        ("reject", "property with no kind", lambda d: p(d, "ventilation_level").pop("kind")),
-        ("reject", "property with no semantic type", lambda d: p(d, "ventilation_level").pop("type")),
-        ("reject", "invented access level", lambda d: p(d, "ventilation_level").update({"access": "commissioning"})),
-        ("reject", "command that is not write_only", lambda d: p(d, "device_reset").update({"access": "read_write"})),
-        ("reject", "measurement with a factory default", lambda d: p(d, "supply_fan_speed").update({"default": 0})),
-        ("reject", "type enum without an enum map", lambda d: p(d, "operating_mode").pop("enum")),
-        ("reject", "enum map on a non-enum type", lambda d: p(d, "ventilation_level").update({"enum": {0: "off"}})),
-        ("reject", "labels on something that is not a bool",
-         lambda d: p(d, "operating_mode").update({"labels": {"false": "a", "true": "b"}})),
-        ("reject", "bool labels missing the true state", lambda d: p(d, "client_enable").update({"labels": {"false": "disabled"}})),
-        ("reject", "scale on an enum", lambda d: p(d, "operating_mode").update({"scale": 0.1})),
-        ("reject", "decimals on a bool", lambda d: p(d, "client_enable").update({"decimals": 1})),
-        ("reject", "max_length on a non-text property", lambda d: p(d, "ventilation_level").update({"max_length": 8})),
-        ("reject", "text without max_length", lambda d: p(d, "ventilation_level").update({"type": "text"})),
-        ("reject", "enum member with a space", lambda d: p(d, "operating_mode")["enum"].update({9: "not valid"})),
-        ("reject", "range with three numbers", lambda d: p(d, "ventilation_level").update({"range": [1, 2, 3]})),
-        ("reject", "scale of zero", lambda d: p(d, "mcu_temperature").update({"scale": 0})),
-        ("reject", "storage width that is not a real width", lambda d: p(d, "ventilation_level").update({"storage": "int24"})),
-        ("reject", "internal: false written out", lambda d: p(d, "nvm_write_count").update({"internal": False})),
-        ("reject", "constraint with when and nothing else",
-         lambda d: p(d, "ventilation_level").update({"constraints": [{"when": "operating_mode == manual"}]})),
-        ("reject", "confirm without danger", lambda d: proc(d, "swap_air_chains").pop("danger")),
-        ("reject", "procedure with no steps", lambda d: proc(d, "swap_air_chains").pop("steps")),
-        ("reject", "await without timeout", lambda d: proc(d, "rescan_sensor_channels")["steps"][1]["await"].pop("timeout_ms")),
-        ("reject", "step with two verbs", lambda d: proc(d, "swap_air_chains")["steps"][2].update({"delay_ms": 5})),
-        ("reject", "write step without a value", lambda d: proc(d, "swap_air_chains")["steps"][0]["write"].pop("value")),
-        ("reject", "duplicate entries in reread",
-         lambda d: proc(d, "rescan_sensor_channels")["steps"][2].update(
-             {"reread": ["supply_ch1_provides_temperature"] * 2})),
-        ("accept", "uppercase enum member", lambda d: p(d, "operating_mode")["enum"].update({9: "ECO"})),
-        ("accept", "hidden service register", lambda d: p(d, "internal_voltage_3v3").update({"hidden": True})),
-        ("accept", "an internal property", lambda d: p(d, "ventilation_level").update({"internal": True})),
-        ("accept", "variants instead of a fixed unit", use_variants),
-        ("accept", "a text property with max_length",
-         lambda d: d["properties"].update({"serial_number": {
-             "title": "Serial Number", "kind": "measurement", "type": "text",
-             "access": "read_only", "max_length": 16}})),
-    ])
-
-    # ---------------------------------------------------------------- modbus
     def hr(d):
         return d["spaces"]["holding"]["registers"]
 
     def coil(d, reg):
+        if "reserved" not in reg:
+            reg.setdefault("access", "read_write")
         d["spaces"]["coil"] = {"base": 1, "registers": [reg]}
 
     def reg_of(d, name):
@@ -173,11 +113,13 @@ def main() -> int:
                                           "reserved": "Reserved for future interface settings."})),
         ("accept", "a 32-bit value in one field",
          lambda d: d["spaces"]["input"]["registers"].append({"address": 600,
-                                          "fields": [{"property": "nvm_write_count", "encoding": "uint32"}]})),
+                                          "fields": [{"property": "nvm_write_count", "encoding": "uint32",
+                                                      "type": "int"}]})),
         ("accept", "a string spanning registers",
          lambda d: d["spaces"]["input"]["registers"].append({"address": 610, "title": "Serial Number",
-                                          "fields": [{"property": "serial_number",
-                                                      "encoding": "chars", "count": 8}]})),
+                                          "fields": [{"property": "serial_number", "type": "text",
+                                                      "encoding": "chars", "count": 8,
+                                                      "max_length": 16}]})),
         # ---- A1: each space states what its numbering counts from
         ("reject", "an empty spaces section", lambda d: d.update({"spaces": {}})),
         ("reject", "a base that is not a number",
@@ -285,6 +227,54 @@ def main() -> int:
         ("reject", "an unknown key on an exception",
          lambda d: d["exceptions"][0].update({"severity": "high"})),
         ("reject", "an empty exceptions list", lambda d: d.update({"exceptions": []})),
+
+        # ---- D21: a field now carries what the value means
+        ("reject", "a field with no semantic type",
+         lambda d: reg_of(d, "device_type")["fields"][0].pop("type")),
+        ("reject", "a semantic type that is not one of the five",
+         lambda d: reg_of(d, "device_type")["fields"][0].update({"type": "word"})),
+        ("reject", "a scale of zero",
+         lambda d: reg_of(d, "supply_voltage")["fields"][0].update({"scale": 0})),
+        ("reject", "a range with three numbers",
+         lambda d: reg_of(d, "ventilation_level")["fields"][0].update({"range": [1, 2, 3]})),
+        ("reject", "an enum member with a space",
+         lambda d: reg_of(d, "operating_mode")["fields"][0]["enum"].update({9: "not valid"})),
+        ("reject", "bool labels missing the true state",
+         lambda d: reg_of(d, "client_enable")["fields"][0].update({"labels": {"false": "off"}})),
+        ("reject", "a misspelled condition key",
+         lambda d: reg_of(d, "ventilation_level")["fields"][0].update({"writeable_when": "x"})),
+        ("reject", "a constraint with a condition and nothing else",
+         lambda d: reg_of(d, "ventilation_level")["fields"][0].update(
+             {"constraints": [{"when": "operating_mode == manual"}]})),
+        ("reject", "a single variant, which is a condition with nothing to choose between",
+         lambda d: reg_of(d, "supply_voltage")["fields"][0].update(
+             {"variants": [{"effective_when": "operating_mode == manual", "unit": "V"}]})),
+        ("accept", "an uppercase enum member",
+         lambda d: reg_of(d, "operating_mode")["fields"][0]["enum"].update({9: "ECO"})),
+        ("accept", "a hidden service register",
+         lambda d: reg_of(d, "internal_voltage_3v3").update({"hidden": True})),
+
+        # ---- access, which the specification leaves to the vendor per address
+        ("reject", "a holding register that does not state its access",
+         lambda d: hr(d)[0].pop("access")),
+        ("reject", "an access value that is not one of the three",
+         lambda d: hr(d)[0].update({"access": "readOnly"})),
+        ("accept", "a write-only holding register",
+         lambda d: hr(d)[0].update({"access": "write_only"})),
+        ("accept", "a reserved holding range, which has no access to state",
+         lambda d: hr(d).append({"from": 7, "to": 8, "reserved": "Spare."})),
+
+        # ---- procedures moved across with the operations they are made of
+        ("reject", "a procedure with no steps",
+         lambda d: d["procedures"]["swap_air_chains"].pop("steps")),
+        ("reject", "confirm without a danger level",
+         lambda d: d["procedures"]["swap_air_chains"].pop("danger")),
+        ("reject", "a step with two verbs",
+         lambda d: d["procedures"]["swap_air_chains"]["steps"][2].update({"delay_ms": 5})),
+        ("reject", "a write step with no value",
+         lambda d: d["procedures"]["swap_air_chains"]["steps"][0]["write"].pop("value")),
+        ("reject", "await without a timeout",
+         lambda d: d["procedures"]["rescan_sensor_channels"]["steps"][1]["await"].pop("timeout_ms")),
     ])
 
     print()

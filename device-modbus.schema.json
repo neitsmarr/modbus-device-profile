@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/modbus-device-profile/device-modbus.schema.json",
   "title": "Modbus register map",
-  "description": "The Modbus interface of one device: which device it is, how a client recognises it, which exceptions it raises, what the transport tolerates, and the address spaces it exposes. A space owns the numbering its registers are written in and the registers themselves; a register owns its address, prose and access, and its fields say which properties it carries. Intended to describe any Modbus device, third-party as well as our own: everything a client needs in order to talk to it is here, and properties are referenced by name from a semantic document that a third-party device may not have.",
+  "description": "The Modbus interface of one device, entire: which device it is, how a client recognises it, which exceptions it raises, what the transport tolerates, the address spaces it exposes, and the commissioning procedures it supports. A space owns the numbering its registers are written in and the registers themselves; a register owns its address, prose and access; a field owns one property's identity, wire encoding and meaning. There is no second document: everything a consumer needs in order to talk to the device, document it, or generate code for it is here.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -310,7 +310,26 @@
               "type": "array",
               "minItems": 1,
               "items": {
-                "$ref": "#/$defs/word_register"
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/word_register"
+                  },
+                  {
+                    "description": "A register that carries something in a read-write space has to state its access. The Modbus specification characterises the holding-register table as read-write but guarantees nothing per address: it leaves the mapping onto device memory entirely to the vendor, so a read-only or write-only holding register conforms, and a client cannot discover which by probing. A default of read_write would therefore be the format asserting what the protocol does not. A reserved range is exempt: it carries nothing to have access to.",
+                    "if": {
+                      "not": {
+                        "required": [
+                          "reserved"
+                        ]
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "access"
+                      ]
+                    }
+                  }
+                ]
               }
             }
           }
@@ -318,7 +337,7 @@
         "input": {
           "type": "object",
           "additionalProperties": false,
-          "description": "The input register space: 16-bit read-only registers, reached by FC 4.",
+          "description": "The input register space: 16-bit read-only registers, reached by FC 4. An input register is read-only by virtue of FC 4, and a discrete input by virtue of FC 2, so `access` adds nothing there and is not required.",
           "required": [
             "base",
             "registers"
@@ -358,7 +377,26 @@
               "type": "array",
               "minItems": 1,
               "items": {
-                "$ref": "#/$defs/bit_register"
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/bit_register"
+                  },
+                  {
+                    "description": "A register that carries something in a read-write space has to state its access. The Modbus specification characterises the holding-register table as read-write but guarantees nothing per address: it leaves the mapping onto device memory entirely to the vendor, so a read-only or write-only holding register conforms, and a client cannot discover which by probing. A default of read_write would therefore be the format asserting what the protocol does not. A reserved range is exempt: it carries nothing to have access to.",
+                    "if": {
+                      "not": {
+                        "required": [
+                          "reserved"
+                        ]
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "access"
+                      ]
+                    }
+                  }
+                ]
               }
             }
           }
@@ -366,7 +404,7 @@
         "discrete": {
           "type": "object",
           "additionalProperties": false,
-          "description": "The discrete input space: single read-only bits, reached by FC 2.",
+          "description": "The discrete input space: single read-only bits, reached by FC 2. An input register is read-only by virtue of FC 4, and a discrete input by virtue of FC 2, so `access` adds nothing there and is not required.",
           "required": [
             "base",
             "registers"
@@ -387,6 +425,16 @@
             }
           }
         }
+      }
+    },
+    "procedures": {
+      "type": "object",
+      "description": "Ordered sequences of reads and writes a commissioning tool runs against this device. They live here because every step is a Modbus operation; steps name fields by the identifier a field's `property` gives.",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/procedure"
       }
     }
   },
@@ -444,9 +492,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "property"
+        "property",
+        "type"
       ],
-      "description": "One property carried by this register, either whole or as a single bit.",
+      "description": "One property carried by this register, whole or as a single bit -- and everything a consumer needs in order to decode, display, validate and condition it. The identifier in `property` is the property's only name: expressions and procedures reference it.",
       "oneOf": [
         {
           "required": [
@@ -505,8 +554,184 @@
             "little"
           ],
           "description": "Overrides limits.word_order for this field."
+        },
+        "type": {
+          "enum": [
+            "bool",
+            "int",
+            "real",
+            "enum",
+            "text"
+          ],
+          "description": "What the value IS, as against how this register carries it. Stated rather than derived from the presence of `enum`, `labels` or `scale`: that derivation is exact on a scaled integer map and wrong the moment a device sends a genuine float32, which carries no scale (D16's reason for keeping `encoding` explicit, in the other direction)."
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum character count, for type 'text' only."
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "false",
+            "true"
+          ],
+          "description": "Names for a bool's two states, e.g. { false: disabled, true: enabled }. What documentation and a commissioning tool show, and what an expression may compare against.",
+          "properties": {
+            "false": {
+              "$ref": "#/$defs/enum_member"
+            },
+            "true": {
+              "$ref": "#/$defs/enum_member"
+            }
+          }
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The field's name. Required where the register carries more than one, since a lone field's name is its register's name (D18)."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prose for this field specifically. A register carrying one field keeps its prose on the register."
+        },
+        "present_when": {
+          "$ref": "#/$defs/expression"
+        },
+        "valid_when": {
+          "$ref": "#/$defs/expression"
+        },
+        "writable_when": {
+          "$ref": "#/$defs/expression"
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Alternative interpretations of the same register, one per configuration. A single variant is a modelling mistake: use top-level presentation instead.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "effective_when"
+            ],
+            "allOf": [
+              {
+                "$ref": "#/$defs/presentation"
+              }
+            ],
+            "properties": {
+              "effective_when": {
+                "$ref": "#/$defs/expression"
+              },
+              "unit": true,
+              "scale": true,
+              "offset": true,
+              "range": true,
+              "step": true,
+              "decimals": true,
+              "enum": true,
+              "display": true
+            }
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Range/default/step that depend on configuration. First matching entry wins.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "when"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "range"
+                ]
+              },
+              {
+                "required": [
+                  "default"
+                ]
+              },
+              {
+                "required": [
+                  "step"
+                ]
+              }
+            ],
+            "properties": {
+              "when": {
+                "$ref": "#/$defs/expression"
+              },
+              "range": {
+                "$ref": "#/$defs/range"
+              },
+              "default": {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        "on_write": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reread": {
+              "description": "What to re-read after writing this signal. The literal 'dependents' resolves against the derived reverse index; an explicit list covers registers the device re-clamps without any expression saying so.",
+              "oneOf": [
+                {
+                  "const": "dependents"
+                },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/$defs/property_ref"
+                  }
+                }
+              ]
+            },
+            "settle_ms": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "unit": true,
+        "scale": true,
+        "offset": true,
+        "range": true,
+        "step": true,
+        "decimals": true,
+        "enum": true,
+        "display": true,
+        "default": {
+          "description": "Factory default, in engineering units or as an enum member -- what a factory reset restores and what a commissioning tool offers as a starting value. Where the default depends on configuration, put it in `constraints` instead.",
+          "type": [
+            "number",
+            "string",
+            "boolean"
+          ]
         }
-      }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/presentation"
+        }
+      ]
     },
     "space": {
       "enum": [
@@ -672,7 +897,7 @@
             "write_only",
             "read_write"
           ],
-          "description": "OPTIONAL and normally omitted: a register's access follows from the properties it carries, and stating it here would duplicate a fact the semantic document already holds. Give it only to NARROW what the bus offers -- a setting the device lets a local interface change but exposes read-only over Modbus. Widening is an error, and validate.py checks it."
+          "description": "Access over the bus. Absent means read_write, which is what a holding register normally is. An input register is read-only by virtue of the function code that reaches it, so stating it there says nothing. Required to be stated wherever it differs, since with the semantic document gone there is no property access left to derive it from."
         },
         "reserved": {
           "type": "string",
@@ -690,6 +915,10 @@
           "type": "string",
           "minLength": 1,
           "description": "What this register means when none of its bits is set, e.g. \"OK\". Only for a register carrying bits. Found missing by generating a 3SModbus library profile, whose bitwise decoder requires such a label and which the format could not supply (D16); a register map document needs it for the same reason."
+        },
+        "hidden": {
+          "const": true,
+          "description": "Service register: real, documented, not shown to an ordinary user. Never written as false; an absent key already says that."
         }
       }
     },
@@ -776,8 +1005,401 @@
           "type": "string",
           "minLength": 1,
           "description": "Why this range carries nothing. The prose is the point -- a bare gap is indistinguishable from an oversight."
+        },
+        "hidden": {
+          "const": true,
+          "description": "Service register: real, documented, not shown to an ordinary user. Never written as false; an absent key already says that."
         }
       }
+    },
+    "expression": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Boolean expression over field identifiers and enum member names. The reverse-dependency index is built by collecting identifiers out of these, so the grammar must stay small and total (DECISIONS.md D1). The grammar itself is not yet pinned down -- OPEN-QUESTIONS.md Q2."
+    },
+    "enum_member": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+      "maxLength": 48,
+      "description": "Enum member name. Uppercase is allowed and often right -- acronyms like LPG read wrong lowercased, and C enum constants are conventionally uppercase. Must still be a valid C identifier for the X-macro. Member names are compared case-sensitively wherever expressions mention them."
+    },
+    "value": {
+      "description": "A register value: an integer, a boolean, an enum member name, or a procedure parameter reference.",
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string",
+          "pattern": "^\\$param\\.[a-z][a-z0-9_]*$"
+        },
+        {
+          "$ref": "#/$defs/enum_member"
+        }
+      ]
+    },
+    "range": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[min, max] in engineering units, after scale is applied."
+    },
+    "enum_map": {
+      "type": "object",
+      "description": "Raw register value -> member name. Mutually exclusive states.",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^(0|[1-9][0-9]*|0x[0-9a-fA-F]+)$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/enum_member"
+      }
+    },
+    "presentation": {
+      "description": "How a raw value becomes an engineering value. Shared by a signal and by each of its variants.",
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "scale": {
+          "type": "number",
+          "not": {
+            "const": 0
+          }
+        },
+        "offset": {
+          "type": "number"
+        },
+        "range": {
+          "$ref": "#/$defs/range"
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "Decimal places to show. Display only -- scale already fixes the value."
+        },
+        "enum": {
+          "$ref": "#/$defs/enum_map"
+        },
+        "display": {
+          "description": "How an int is rendered. 'version' means the raw bytes shown as hex and dot-joined with the leading zero trimmed, so 0x0130 reads as 1.30 -- which is 50 of the 55 bytewise decoders in the company library. Display only: the value is an integer.",
+          "enum": [
+            "decimal",
+            "hex",
+            "version"
+          ]
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": [
+        "property"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "equals"
+          ]
+        },
+        {
+          "required": [
+            "in"
+          ]
+        }
+      ],
+      "properties": {
+        "property": {
+          "$ref": "#/$defs/property_ref"
+        },
+        "equals": {
+          "$ref": "#/$defs/value"
+        },
+        "in": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "write"
+          ]
+        },
+        {
+          "required": [
+            "read"
+          ]
+        },
+        {
+          "required": [
+            "reread"
+          ]
+        },
+        {
+          "required": [
+            "await"
+          ]
+        },
+        {
+          "required": [
+            "delay_ms"
+          ]
+        }
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "write": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "property",
+            "value"
+          ],
+          "properties": {
+            "property": {
+              "$ref": "#/$defs/property_ref"
+            },
+            "value": {
+              "$ref": "#/$defs/value"
+            }
+          }
+        },
+        "read": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "property"
+          ],
+          "properties": {
+            "property": {
+              "$ref": "#/$defs/property_ref"
+            }
+          }
+        },
+        "reread": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/property_ref"
+          }
+        },
+        "await": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "timeout_ms"
+          ],
+          "allOf": [
+            {
+              "$ref": "#/$defs/condition"
+            }
+          ],
+          "properties": {
+            "property": true,
+            "equals": true,
+            "in": true,
+            "timeout_ms": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "poll_ms": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "delay_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "read"
+          ],
+          "oneOf": [
+            {
+              "required": [
+                "equals"
+              ]
+            },
+            {
+              "required": [
+                "in"
+              ]
+            }
+          ],
+          "properties": {
+            "read": {
+              "$ref": "#/$defs/property_ref"
+            },
+            "equals": {
+              "$ref": "#/$defs/value"
+            },
+            "in": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            },
+            "timeout_ms": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    },
+    "procedure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "steps"
+      ],
+      "dependentRequired": {
+        "confirm": [
+          "danger"
+        ]
+      },
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "danger": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Drives how loudly the commissioning tool asks before running."
+        },
+        "confirm": {
+          "type": "string",
+          "description": "Shown verbatim before running. Says what breaks, not 'are you sure'."
+        },
+        "duration_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Expected wall time, for progress UI."
+        },
+        "preconditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/expression"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "on_failure": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "success": {
+              "$ref": "#/$defs/condition"
+            },
+            "failure": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "enum_from"
+                ]
+              },
+              {
+                "required": [
+                  "type"
+                ]
+              }
+            ],
+            "properties": {
+              "enum_from": {
+                "$ref": "#/$defs/property_ref",
+                "description": "Take the allowed values from that signal's enum."
+              },
+              "type": {
+                "enum": [
+                  "bool",
+                  "int",
+                  "real",
+                  "enum",
+                  "text"
+                ]
+              },
+              "range": {
+                "$ref": "#/$defs/range"
+              },
+              "default": {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "property_ref": {
+      "$ref": "#/$defs/identifier",
+      "description": "The identifier of a field's `property` somewhere in this map. Procedures and expressions name fields by it, which is why it survived the semantic document it was defined in: it is the one name a device property has."
     }
   }
 }

@@ -1,26 +1,20 @@
 #!/usr/bin/env python3
-"""Validate a device profile: a properties document plus a Modbus register map.
+"""Validate a device profile: one Modbus register map, entire.
 
-Three layers.
+Two layers, since D21 folded the semantic document in and there is no longer a
+second file to agree with.
 
-Layer 1 is the JSON Schemas: shape and vocabulary of each document on its own.
+Layer 1 is the JSON Schema: shape and vocabulary of the document on its own.
 
-Layer 2 is what a schema cannot express because it needs a whole document at
-once -- reference resolution, enum coverage, storage widths, and D1's derived
-reverse index. For the register map it is also everything that depends on a
-sibling section rather than one register: the address bounds implied by
-addressing.base, whether identification and the exception table agree with the
-function codes `limits` declares, and which registers still lack the prose D18
-requires.
+Layer 2 is what a schema cannot express because it needs more of the document
+than the subtree it is looking at -- reference resolution, enum coverage, D1's
+derived reverse index, the address bounds implied by each space's base, whether
+identification and the exception table agree with the function codes `limits`
+declares, whether two fields collide on an address or a bit, whether a field's
+encoding can carry the type it declares, and which registers still lack the
+prose D18 requires.
 
-Layer 3 is what neither document can check alone: the two must agree. Every
-property that is not internal has to be carried by exactly one register field,
-every field has to name a property that exists, no two fields may overlap, and a
-field's encoding has to suit the property's type. This layer is why the D15
-split costs nothing in safety -- the completeness a single file got from keeping
-the address beside the property is recovered as a check.
-
-Usage:  python validate.py [properties.yaml [modbus.yaml]]
+Usage:  python validate.py [modbus.yaml]
 
 Exit status is 1 if anything is an error, 0 if only warnings.
 """
@@ -33,9 +27,7 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).parent
-PROPS_DOC = HERE / "device-properties.yaml"
 MODBUS_DOC = HERE / "device-modbus.yaml"
-PROPS_SCHEMA = HERE / "device-properties.schema.json"
 MODBUS_SCHEMA = HERE / "device-modbus.schema.json"
 
 # Words an expression may use that are not property references. Provisional:
@@ -177,41 +169,80 @@ def expression_identifiers(expr: str) -> set[str]:
     return {m.group(0) for m in IDENT_RE.finditer(stripped)} - EXPR_KEYWORDS
 
 
-def member_namespace(props):
+def field_index(doc, rep: Report) -> dict[str, dict]:
+    """Every field in the map, by the identifier its `property` gives.
+
+    That identifier is a device property's only name now (D21), so this is the
+    namespace expressions, procedures and the reverse index all resolve against.
+    Two fields sharing one is the error the two-document layout used to catch as
+    "carried by more than one register".
+    """
+    out: dict[str, dict] = {}
+    where: dict[str, str] = {}
+    for space, reg, field, at in iter_fields(doc):
+        name = field.get("property")
+        if name is None:
+            continue
+        if name in out:
+            rep.error(f"{at}: '{name}' is already carried at {where[name]}; a property has "
+                      f"one name, so two fields cannot share it")
+            continue
+        out[name], where[name] = field, at
+        field["__space"], field["__at"], field["__reg"] = space, at, reg
+    return out
+
+
+def iter_fields(doc):
+    for space, reg, at in iter_registers(doc):
+        for i, field in enumerate(fields_of(reg)):
+            yield space, reg, field, f"{at}/fields/{i}"
+
+
+def derived_kind(space: str, access: str) -> str:
+    """What sort of thing a field is, which follows from where it sits.
+
+    Measured across all 277 fields when the semantic document was folded in: the
+    declared `kind` agreed with this in every case, so it is derived rather than
+    stored (D16).
+    """
+    if space in ("input", "discrete") or access == "read_only":
+        return "measurement"
+    return "command" if access == "write_only" else "setting"
+
+
+def member_namespace(fields):
     members: dict[str, set[str]] = {}
-    for name, sig in props.items():
-        got = set((sig.get("enum") or {}).values())
-        got |= set((sig.get("labels") or {}).values())
-        for v in sig.get("variants") or []:
+    for name, f in fields.items():
+        got = set((f.get("enum") or {}).values())
+        got |= set((f.get("labels") or {}).values())
+        for v in f.get("variants") or []:
             got |= set((v.get("enum") or {}).values())
         if got:
             members[name] = got
     return members
 
 
-def property_expressions(sig):
-    exprs = [sig[k] for k in ("present_when", "valid_when", "writable_when") if k in sig]
-    exprs += [v[k] for v in sig.get("variants") or [] for k in WHEN_KEYS if k in v]
-    exprs += [c[k] for c in sig.get("constraints") or [] for k in WHEN_KEYS if k in c]
+def field_expressions(f):
+    exprs = [f[k] for k in ("present_when", "valid_when", "writable_when") if k in f]
+    exprs += [v[k] for v in f.get("variants") or [] for k in WHEN_KEYS if k in v]
+    exprs += [c[k] for c in f.get("constraints") or [] for k in WHEN_KEYS if k in c]
     return exprs
 
 
 # ------------------------------------------------------------------ layer 2
-def check_references(doc, rep: Report) -> None:
-    props = doc.get("properties") or {}
-    procedures = doc.get("procedures") or {}
-    enum_members = member_namespace(props)
+def check_references(doc, fields, rep: Report) -> None:
+    enum_members = member_namespace(fields)
     all_members = {m for ms in enum_members.values() for m in ms}
 
     def want(ref, where):
-        if ref not in props:
-            rep.error(f"{where}: property '{ref}' is referenced but never declared")
+        if ref not in fields:
+            rep.error(f"{where}: '{ref}' is referenced but no field carries it")
 
-    for path, key, value in walk(doc):
-        where = "/".join(str(p) for p in path + (key,))
+    for path, key, value in walk(doc.get("procedures") or {}):
+        where = "procedures/" + "/".join(str(p) for p in path + (key,))
         if key in ("property", "read", "enum_from") and isinstance(value, str):
             want(value, where)
-            if key == "enum_from" and value in props and value not in enum_members:
+            if key == "enum_from" and value in fields and value not in enum_members:
                 rep.error(f"{where}: '{value}' has no enum to take values from")
         elif key == "reread" and isinstance(value, list):
             for ref in value:
@@ -219,20 +250,22 @@ def check_references(doc, rep: Report) -> None:
 
     def idents_ok(expr, where):
         for ident in sorted(expression_identifiers(expr)):
-            if ident not in props and ident not in all_members:
-                rep.error(f"{where}: '{ident}' in expression is neither a property "
-                          f"nor a member of one")
+            if ident not in fields and ident not in all_members:
+                rep.error(f"{where}: '{ident}' in expression is neither a field nor a "
+                          f"member of one")
 
-    for name, sig in props.items():
-        for expr in property_expressions(sig):
-            idents_ok(expr, f"properties/{name}")
-    for pname, proc in procedures.items():
+    for name, f in fields.items():
+        for expr in field_expressions(f):
+            idents_ok(expr, f["__at"])
+    for pname, proc in (doc.get("procedures") or {}).items():
         for i, expr in enumerate(proc.get("preconditions") or []):
             idents_ok(expr, f"procedures/{pname}/preconditions/{i}")
+        for ref in (proc.get("on_write") or {}).get("reread") or []:
+            want(ref, f"procedures/{pname}")
 
-    for name, sig in props.items():
-        for group, entries in (("constraints", sig.get("constraints")),
-                               ("variants", sig.get("variants"))):
+    for name, f in fields.items():
+        for group, entries in (("constraints", f.get("constraints")),
+                               ("variants", f.get("variants"))):
             if not entries:
                 continue
             mentioned: dict[str, set[str]] = {}
@@ -245,80 +278,44 @@ def check_references(doc, rep: Report) -> None:
             for sel, covered in mentioned.items():
                 missing = enum_members[sel] - covered
                 if missing:
-                    rep.warn(f"properties/{name}/{group}: no entry covers "
+                    rep.warn(f"{f['__at']}/{group}: no entry covers "
                              f"{sel} == {', '.join(sorted(missing))}")
 
-    for name, sig in props.items():
-        if sig.get("kind") == "setting" and "default" not in sig:
-            rep.warn(f"properties/{name}: a setting with no default cannot be "
-                     f"factory-reset or offered a starting value")
+    for name, f in fields.items():
+        reg = f["__reg"]
+        kind = derived_kind(f["__space"], reg.get("access", "read_write"))
+        if kind == "setting" and "default" not in f:
+            rep.warn(f"{f['__at']}: a setting with no default cannot be factory-reset or "
+                     f"offered a starting value")
+        if kind == "measurement" and "default" in f:
+            rep.warn(f"{f['__at']}: a factory default is meaningless on a value the device "
+                     f"produces")
 
 
-def raw_span(sig):
-    if "range" not in sig:
+def raw_span(f):
+    if "range" not in f:
         return None
-    scale = sig.get("scale", 1) or 1
-    lo, hi = sig["range"]
+    scale = f.get("scale", 1) or 1
+    lo, hi = f["range"]
     return (lo / scale, hi / scale)
 
 
-def narrowest_width(lo: float, hi: float):
-    for w in ("uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64"):
-        c = WIDTH_CAPACITY[w]
-        if lo >= c[0] - 0.5 and hi <= c[1] + 0.5:
-            return w
-    return None
-
-
-def check_storage(doc, encodings, rep: Report) -> None:
-    """Storage width, derived from range and checked against any declaration."""
-    for name, sig in (doc.get("properties") or {}).items():
-        stype = sig.get("type")
-        if stype is None:
-            continue
-        span = raw_span(sig)
-        declared = sig.get("storage")
-        derived = None
-        if stype == "bool":
-            derived = "bool"
-        elif stype == "enum":
-            top = max((int(v) for v in (sig.get("enum") or {})), default=0)
-            derived = narrowest_width(0, top)
-        elif span:
-            derived = narrowest_width(*span)
-        elif encodings.get(name) in WIDTH_CAPACITY:
-            derived = encodings[name]
-
-        if declared and declared in WIDTH_CAPACITY and span:
-            c = WIDTH_CAPACITY[declared]
-            if span[0] < c[0] - 0.5 or span[1] > c[1] + 0.5:
-                rep.error(f"properties/{name}: declared storage '{declared}' cannot hold "
-                          f"raw range {span[0]:.0f}..{span[1]:.0f}")
-        elif not declared and derived is None and stype != "text":
-            rep.error(f"properties/{name}: storage width is underivable -- give it a "
-                      f"range, an encoding in the register map, or an explicit storage")
-
-        if stype == "text" and "max_length" not in sig:
-            rep.error(f"properties/{name}: type 'text' needs max_length")
-
-
-def reverse_index(doc) -> dict[str, set[str]]:
-    """D1's derived index: selector property -> properties that depend on it."""
-    props = doc.get("properties") or {}
+def reverse_index(fields) -> dict[str, set[str]]:
+    """D1's derived index: selector field -> fields that depend on it."""
     index: dict[str, set[str]] = {}
-    for name, sig in props.items():
-        for expr in property_expressions(sig):
+    for name, f in fields.items():
+        for expr in field_expressions(f):
             for ident in expression_identifiers(expr):
-                if ident in props and ident != name:
+                if ident in fields and ident != name:
                     index.setdefault(ident, set()).add(name)
     return index
 
 
-def check_reread_dependents(doc, index, rep: Report) -> None:
-    for name, sig in (doc.get("properties") or {}).items():
-        if (sig.get("on_write") or {}).get("reread") == "dependents" and not index.get(name):
-            rep.warn(f"properties/{name}/on_write/reread: 'dependents' resolves to "
-                     f"nothing -- no expression references {name}")
+def check_reread_dependents(fields, index, rep: Report) -> None:
+    for name, f in fields.items():
+        if (f.get("on_write") or {}).get("reread") == "dependents" and not index.get(name):
+            rep.warn(f"{f['__at']}/on_write/reread: 'dependents' resolves to nothing -- no "
+                     f"expression references {name}")
 
 
 # ------------------------------------------------------------------ layer 3
@@ -536,12 +533,14 @@ def check_documentation(modbus_doc, rep: Report) -> None:
                      f"generate a register table ({shown}{more}) -- D18")
 
 
-def check_agreement(props_doc, modbus_doc, rep: Report):
-    """The two documents have to agree. Returns (encoding per property, on-bus set)."""
-    props = props_doc.get("properties") or {}
+def check_layout(doc, fields, rep: Report) -> None:
+    """What occupies which address, and whether each field's wire form fits it.
 
-    encodings: dict[str, str] = {}
-    owner: dict[str, str] = {}        # property -> where it is carried
+    This was layer 3 when there were two documents to reconcile. With one, the
+    same questions are local to the map: no two things on one address or one bit,
+    a wide encoding not running into its neighbour, and an encoding that can
+    actually carry the type and range the field declares.
+    """
     whole: dict[tuple, str] = {}      # (space, address) -> what occupies it entirely
     packed: dict[tuple, str] = {}     # (space, address) -> the register packing bits
     bits: dict[tuple, str] = {}       # (space, address, bit) -> field
@@ -553,36 +552,23 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
             rep.error(f"{at}: {space} {addr} is already used by {prior}")
         (whole if kind == "whole" else packed)[key] = what
 
-    for space, reg, at in iter_registers(modbus_doc):
+    for space, reg, at in iter_registers(doc):
         if reg.get("reserved"):
             lo, hi = reg.get("from"), reg.get("to")
             if lo is not None and hi is not None:
-                if hi < lo:
-                    rep.error(f"{at}: reserved range {lo}..{hi} runs backwards")
                 for a in range(lo, hi + 1):
                     claim(space, a, f"a reserved range ({at})", at, "whole")
             continue
 
         addr = reg.get("address")
-        fields = fields_of(reg)
-        if any("bit" in f for f in fields):
+        regfields = fields_of(reg)
+        if any("bit" in f for f in regfields):
             claim(space, addr, f"packed bits ({at})", at, "packed")
 
-        for fi, field in enumerate(fields):
+        for fi, field in enumerate(regfields):
             fat = f"{at}/fields/{fi}"
             name = field.get("property")
-            if name not in props:
-                rep.error(f"{fat}: names property '{name}', which is not declared")
-                continue
-            if name in owner:
-                rep.error(f"{fat}: property '{name}' is already carried by {owner[name]}")
-                continue
-            owner[name] = fat
-            sig = props[name]
-            stype = sig.get("type")
-
-            if sig.get("internal"):
-                rep.error(f"{fat}: '{name}' is marked internal but a register carries it")
+            ftype = field.get("type")
 
             if "bit" in field:
                 key = (space, addr, field["bit"])
@@ -590,65 +576,46 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
                     rep.error(f"{fat}: bit {field['bit']} of {space} {addr} is already "
                               f"taken by {bits[key]}")
                 bits[key] = fat
-                encodings[name] = "bit"
-                if stype != "bool":
-                    rep.error(f"{fat}: '{name}' is type '{stype}', but only a bool can be "
+                if ftype != "bool":
+                    rep.error(f"{fat}: '{name}' is type '{ftype}', but only a bool can be "
                               f"carried as a single bit")
                 continue
 
             enc = field.get("encoding")
-            encodings[name] = enc
+            if enc is None:          # a coil: the address is the bit
+                if ftype != "bool":
+                    rep.error(f"{fat}: '{name}' is type '{ftype}', but a {space} carries one bit")
+                claim(space, addr, f"'{name}' ({fat})", fat, "whole")
+                continue
+
             span = SPAN.get(enc, 1) * field.get("count", 1)
             for a in range(addr, addr + span):
                 claim(space, a, f"'{name}' ({fat})", fat, "whole")
 
-            if stype and enc not in ENCODINGS_FOR.get(stype, set()):
-                rep.error(f"{fat}: type '{stype}' cannot be carried as '{enc}' "
-                          f"(allowed: {', '.join(sorted(ENCODINGS_FOR[stype]))})")
-            elif stype == "real" and enc not in ("float32", "float64") and "scale" not in sig:
+            if ftype and enc not in ENCODINGS_FOR.get(ftype, set()):
+                rep.error(f"{fat}: type '{ftype}' cannot be carried as '{enc}' "
+                          f"(allowed: {', '.join(sorted(ENCODINGS_FOR[ftype]))})")
+            elif ftype == "real" and enc not in ("float32", "float64") and "scale" not in field:
                 rep.error(f"{fat}: a real carried as '{enc}' needs a scale, or its "
                           f"fractional part is unrepresentable")
-            rs = raw_span(sig)
+            if ftype == "text" and "max_length" not in field:
+                rep.error(f"{fat}: type 'text' needs max_length")
+
+            rs = raw_span(field)
             if rs and enc in WIDTH_CAPACITY:
                 c = WIDTH_CAPACITY[enc]
                 if rs[0] < c[0] - 0.5 or rs[1] > c[1] + 0.5:
-                    rep.error(f"{fat}: range {sig['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
+                    rep.error(f"{fat}: range {field['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
                               f"after scale, which does not fit '{enc}' ({c[0]}..{c[1]})")
-            if stype == "enum" and enc in WIDTH_CAPACITY:
-                top = max((int(v) for v in (sig.get("enum") or {})), default=0)
+            if ftype == "enum" and enc in WIDTH_CAPACITY:
+                top = max((int(v) for v in (field.get("enum") or {})), default=0)
                 if top > WIDTH_CAPACITY[enc][1]:
                     rep.error(f"{fat}: enum value {top} does not fit '{enc}'")
 
-        # A register's access is derived from what it carries. An explicit one may
-        # only narrow it: the bus may offer less than the property allows, never
-        # more. Checking agreement instead of deriving would be D1's mistake --
-        # two copies of one fact, with a checker standing in for a single source.
-        declared = reg.get("access")
-        if declared:
-            allowed = {props[f["property"]].get("access", "read_write")
-                       for f in fields if f.get("property") in props}
-            derived = ("read_only" if allowed == {"read_only"}
-                       else "write_only" if allowed == {"write_only"}
-                       else "read_write")
-            if derived != "read_write" and declared != derived:
-                rep.error(f"{at}: access '{declared}' widens what its properties allow "
-                          f"('{derived}'); a register may only narrow access")
 
-    for name, sig in props.items():
-        if not sig.get("internal") and name not in owner:
-            rep.error(f"properties/{name}: carried by no register and not marked internal "
-                      f"-- it would silently vanish from the register map")
-
-    on_bus = set(owner)
-
-    for name in sorted(on_bus):
-        for expr in property_expressions(props[name]):
-            for ident in sorted(expression_identifiers(expr)):
-                if ident in props and ident not in on_bus:
-                    rep.error(f"properties/{name}: condition references '{ident}', which "
-                              f"no register carries -- a client cannot evaluate it")
-
-    for pname, proc in (props_doc.get("procedures") or {}).items():
+def check_procedures(doc, fields, rep: Report) -> None:
+    """A procedure may only touch what the map actually carries."""
+    for pname, proc in (doc.get("procedures") or {}).items():
         steps = list(proc.get("steps") or []) + list(proc.get("on_failure") or [])
         for i, step in enumerate(steps):
             targets = []
@@ -661,33 +628,37 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
             if isinstance(step.get("verify"), dict) and "read" in step["verify"]:
                 targets.append(step["verify"]["read"])
             for ref in targets:
-                if ref in props and ref not in on_bus:
-                    rep.error(f"procedures/{pname}/steps/{i}: targets '{ref}', which no "
-                              f"register carries, so a procedure cannot reach it")
-
-    return encodings, on_bus
+                if ref not in fields:
+                    rep.error(f"procedures/{pname}/steps/{i}: targets '{ref}', which no field "
+                              f"carries, so a procedure cannot reach it")
+            # A write step is only meaningful where the bus accepts writes.
+            tgt = (step.get("write") or {}).get("property")
+            if tgt in fields:
+                acc = fields[tgt]["__reg"].get("access", "read_write")
+                space = fields[tgt]["__space"]
+                if space in ("input", "discrete") or acc == "read_only":
+                    rep.error(f"procedures/{pname}/steps/{i}: writes '{tgt}', which is "
+                              f"read-only over the bus")
 
 
 def main(argv: list[str]) -> int:
-    props_path = pathlib.Path(argv[1]) if len(argv) > 1 else PROPS_DOC
-    modbus_path = pathlib.Path(argv[2]) if len(argv) > 2 else MODBUS_DOC
-    props_doc = load_yaml(props_path)
-    modbus_doc = load_yaml(modbus_path)
+    path = pathlib.Path(argv[1]) if len(argv) > 1 else MODBUS_DOC
+    doc = load_yaml(path)
     rep = Report()
 
-    check_schema(props_doc, PROPS_SCHEMA, props_path.name, rep)
-    check_schema(modbus_doc, MODBUS_SCHEMA, modbus_path.name, rep)
-    check_references(props_doc, rep)
-    check_addressing(modbus_doc, rep)
-    check_identification(modbus_doc, rep)
-    check_exceptions(modbus_doc, rep)
-    check_documentation(modbus_doc, rep)
-    encodings, _ = check_agreement(props_doc, modbus_doc, rep)
-    check_storage(props_doc, encodings, rep)
-    index = reverse_index(props_doc)
-    check_reread_dependents(props_doc, index, rep)
+    check_schema(doc, MODBUS_SCHEMA, path.name, rep)
+    fields = field_index(doc, rep)
+    check_addressing(doc, rep)
+    check_identification(doc, rep)
+    check_exceptions(doc, rep)
+    check_documentation(doc, rep)
+    check_references(doc, fields, rep)
+    check_layout(doc, fields, rep)
+    check_procedures(doc, fields, rep)
+    index = reverse_index(fields)
+    check_reread_dependents(fields, index, rep)
 
-    print(f"-- derived reverse index ({props_path.name})")
+    print(f"-- derived reverse index ({path.name})")
     if not index:
         print("   (empty)")
     for sel in sorted(index):

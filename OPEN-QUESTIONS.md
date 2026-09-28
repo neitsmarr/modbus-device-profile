@@ -100,3 +100,36 @@ the device "tolerates" rather than as the wire facts they are.
 registers need a title and a description, and 87 bit fields need a title. It is
 a validator warning rather than a schema requirement until the count reaches
 zero. Not a question about the format — a question about who writes the prose.
+
+## Q6 — Read and write at one address meaning different things
+
+The Modbus specification defines FC 03, FC 06 and FC 16 against the same named
+table -- *Holding Registers* -- so at the level of the abstract table they
+address the same thing. It makes **no per-address guarantee**: the mapping of the
+data model onto device memory is explicitly left to the vendor, and the four
+tables may be separate blocks or overlay one another. Three things follow that
+are widely assumed to be guaranteed and are not:
+
+- a holding register need not be both readable and writable
+- read-back need not equal what was written; FC 16's response echoes the address
+  and the quantity, never the stored value, so the protocol confirms nothing
+- nothing forbids one address meaning different things in the two directions --
+  reading a status word where writing triggers a command
+
+The first is handled: `access` is stated per register, and D21 made it required
+in the read-write spaces for exactly this reason. The third is **not
+expressible**: a register entry has one `fields` list, so one address has one
+meaning, and a device that returns status on FC 03 while accepting a command on
+FC 06 would have to be described as one or the other. `modbus_registers_reset`
+at holding 10 is a mild instance -- writing `reset` triggers, reading almost
+certainly returns `idle` rather than the last value written.
+
+The shape that would express it is a per-direction field list -- `on_read:` and
+`on_write:` beside the flat `fields:`, which stays as shorthand for "both". It is
+not worth building before a device needs it: it doubles the shape of the
+commonest entry in the format. Recorded because the reason it is absent should be
+a decision rather than an oversight.
+
+A related consequence that is already handled: because a write response confirms
+nothing, a procedure's `verify` step has to re-read the register rather than trust
+the write's reply. Every `verify` in the map does.

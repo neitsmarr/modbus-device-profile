@@ -1429,3 +1429,97 @@ churn: `iter_registers`, which yields `(space, register, path)`, and `fields_of`
 which hides the bit-register shape. The reindent found one latent bug on the way
 — `decoder_for` read `reg["space"]` on a code path only reachable when a packed
 register lacks a `clear_label`, which would now have been a `KeyError`.
+
+## D21 — One document. A field owns its meaning, and access is stated because the protocol guarantees nothing
+
+**Rule.** `device-properties.yaml` and its schema are gone. Everything a Modbus
+consumer can use moved into the register map: a field now carries its property's
+identifier, its wire encoding *and* what the value means.
+
+    - address: 23
+      title: "Ventilation Level"
+      access: read_write
+      fields:
+        - property: ventilation_level
+          encoding: uint16
+          type: int
+          unit: "%"
+          range: [0, 100]
+          step: 5
+          default: 50
+          writable_when: operating_mode == manual
+
+A register keeps what belongs to the register — title, prose, access, `hidden`,
+`clear_label`. A field keeps what belongs to one value. `procedures:` came across
+whole, because every step in one is a Modbus operation.
+
+**Why the split had to end.** D15 separated the documents so the protocol layer
+could be self-contained, and D17 finished the job for a third-party device, where
+there is no semantic document to pair with. At that point the second file was
+serving only our own device, and the map was the document every consumer actually
+read. A register map that cannot state what a value means is not a description of
+an interface; it is a list of addresses.
+
+**A field's `property` is now that property's only name.** It is what expressions
+reference, what procedures target, and what the reverse-dependency index of D1 is
+built from — so nothing about D1 changed, and two fields sharing an identifier is
+now the error that "carried by more than one register" used to be.
+
+**What is stated, and what proved derivable.**
+
+- **`access` is stated, and required in every read-write space.** This is the
+  entry's most consequential rule and the reason is the specification itself:
+  FC 03, FC 06 and FC 16 are defined against the same *table*, but Modbus makes
+  no per-address guarantee at all. It leaves the mapping of the data model onto
+  device memory entirely to the vendor, so a read-only or write-only holding
+  register conforms, and a client cannot discover which by probing. A default of
+  `read_write` would therefore be the format asserting something the protocol
+  does not — the same objection that made `addressing.base` required in D17. An
+  input register is exempt: FC 4 fixes its direction, so stating it says nothing.
+
+  This also retires D16's derivation of register access from property access.
+  That derivation measured identical in 209 of 209 cases and was right at the
+  time; with the semantic document gone there is nothing left to derive from, so
+  the fact has to be stated, and the narrowing check it justified is deleted.
+
+- **`kind` is dropped, having proved derivable.** Setting, measurement or command
+  follows from the space and the access: input space or read-only means
+  measurement, write-only means command, read-write holding means setting.
+  Measured across all 277 carried fields at migration time, the declared value
+  agreed in **277 of 277**. Per D16, a fact that follows is not stored;
+  `validate.py` derives it for the two warnings that need it.
+
+- **`type` is kept**, though it looks derivable from the presence of `enum`,
+  `labels` or `scale`. That derivation is exact on this map and wrong the moment
+  a device sends a genuine `float32`, which carries no scale — precisely the trap
+  D16 named when it refused to derive `encoding` from `range`.
+
+- **`internal` and `storage` are dropped.** An internal property is one no
+  register carries, which is unrepresentable once the map is the only document;
+  the two the AHU had are simply gone. `storage` described a firmware struct
+  width rather than anything on the wire, and was never used.
+
+**D18 is most of the way paid off as a side effect.** Register titles came across
+from the properties that had them, so the 190 registers missing a title and the
+87 bit fields missing one are both now zero. 185 still lack a description, which
+is the honest remainder: only 24 properties ever carried prose.
+
+**What the validator lost.** Its whole third layer. Cross-document agreement —
+every property carried exactly once, every field naming a property that exists —
+collapses into a field-index that reports duplicates, because with one document
+those cannot disagree. What remains as `check_layout` is what was always local to
+the map: address occupancy, bit collisions, wide encodings running into their
+neighbours, and whether an encoding can carry the type and range a field claims.
+`check_procedures` gained a check the split made impossible to write cleanly: a
+procedure that writes a register the bus exposes read-only is now an error.
+
+**Cost.** The map went from 954 lines to roughly 3100, which is the whole point:
+it now contains what two files did. Every consumer reads one document, and the
+generator lost its second load. The measured casualty list for the 3SModbus
+conversion dropped from three to one — the two internal properties stopped
+existing, leaving only the three-term conjunction the library's condition grammar
+cannot express.
+
+**Left open.** One address meaning different things on read and on write is not
+expressible, and Modbus permits it: `OPEN-QUESTIONS.md` Q6 records the shape that
+would express it and why it is not being built yet.
