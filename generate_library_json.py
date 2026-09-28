@@ -63,14 +63,14 @@ def numerical(sig):
     return dec
 
 
-def decoder_for(reg, fields, props, unsupported):
+def decoder_for(space, reg, fields, props, unsupported):
     """A library decoder for one register."""
     if any("bit" in f for f in fields):
         bits = [{"index": f["bit"], "label": bit_label(props[f["property"]]["title"])}
                 for f in sorted(fields, key=lambda f: f["bit"])]
         clear = reg.get("clear_label")
         if not clear:
-            unsupported.append(f"{reg['space']} {reg['address']}: no clear_label, so the "
+            unsupported.append(f"{space} {reg['address']}: no clear_label, so the "
                                f"library's required 'no bit set' label must be invented")
             clear = "OK"
         return {"type": "bitwise", "default": clear, "bits": bits}
@@ -145,10 +145,15 @@ def main(argv):
     props = props_doc["properties"]
     dev = props_doc["device"]
 
+    # Spaces are containers (D20), so walk them rather than one flat list.
+    registers = [(space, block["base"], reg)
+                 for space, block in modbus_doc["spaces"].items()
+                 for reg in block["registers"]]
+
     addr_of = {}
-    for reg in modbus_doc["registers"]:
+    for space, _base, reg in registers:
         for f in reg.get("fields") or []:
-            addr_of[f["property"]] = (reg["space"], reg["address"])
+            addr_of[f["property"]] = (space, reg["address"])
 
     unsupported: list[str] = []
     out = {"deviceName": dev["name"],
@@ -157,27 +162,26 @@ def main(argv):
            "firmwareVersion": dev["firmware_version"],
            "inputRegisters": [], "holdingRegisters": []}
 
-    for reg in modbus_doc["registers"]:
+    for space, base, reg in registers:
         fields = reg.get("fields") or []
         if not fields:
-            unsupported.append(f"{reg['space']} {reg.get('from')}..{reg.get('to')}: "
+            unsupported.append(f"{space} {reg.get('from')}..{reg.get('to')}: "
                                f"reserved range has no representation in the library format")
             continue
         sig = props[fields[0]["property"]]
         name = reg.get("title") or sig["title"]
         # The library numbers registers from 1, so go via the wire offset rather
-        # than copying our address across: the two only coincide when this
-        # document happens to declare a base of 1 (D17).
-        base = modbus_doc["addressing"][reg["space"]]
+        # than copying our address across: the two only coincide when the space
+        # happens to declare a base of 1 (D17).
         entry = {"number": reg["address"] - base + 1, "name": name,
-                 "decoder": decoder_for(reg, fields, props, unsupported)}
+                 "decoder": decoder_for(space, reg, fields, props, unsupported)}
 
         if len(fields) == 1 and "bit" not in fields[0]:
             if sig.get("unit"):
                 entry["units"] = sig["unit"]
             if sig.get("hidden"):
                 entry["hidden"] = True
-            if reg["space"] == "holding":
+            if space == "holding":
                 if "default" in sig:
                     entry["default"] = str(sig["default"])
                 acc = reg.get("access") or sig.get("access", "read_write")
@@ -187,7 +191,7 @@ def main(argv):
             if cond:
                 entry["condition"] = cond
 
-        key = "inputRegisters" if reg["space"] == "input" else "holdingRegisters"
+        key = "inputRegisters" if space == "input" else "holdingRegisters"
         out[key].append(entry)
 
     for name, sig in props.items():

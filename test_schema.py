@@ -119,30 +119,41 @@ def main() -> int:
     ])
 
     # ---------------------------------------------------------------- modbus
+    def hr(d):
+        return d["spaces"]["holding"]["registers"]
+
+    def coil(d, reg):
+        d["spaces"]["coil"] = {"base": 1, "registers": [reg]}
+
     def reg_of(d, name):
-        for reg in d["registers"]:
-            for f in reg.get("fields") or []:
-                if f.get("property") == name:
-                    return reg
+        for block in d["spaces"].values():
+            for reg in block["registers"]:
+                for f in reg.get("fields") or []:
+                    if f.get("property") == name:
+                        return reg
         raise AssertionError(name)
 
     suite("device-modbus.yaml", "device-modbus.schema.json", [
-        ("reject", "no registers section", lambda d: d.pop("registers")),
-        ("reject", "register without a space", lambda d: d["registers"][0].pop("space")),
-        ("reject", "unknown address space", lambda d: d["registers"][0].update({"space": "register"})),
-        ("reject", "register with neither address nor reserved range", lambda d: d["registers"][0].pop("address")),
+        ("reject", "no spaces section", lambda d: d.pop("spaces")),
+        ("reject", "a space with no registers", lambda d: d["spaces"]["holding"].pop("registers")),
+        ("reject", "a space with no base", lambda d: d["spaces"]["holding"].pop("base")),
+        ("reject", "an address space Modbus does not have",
+         lambda d: d["spaces"].update({"register": {"base": 1, "registers": [{"address": 1}]}})),
+        ("reject", "a register still carrying its own space",
+         lambda d: hr(d)[0].update({"space": "holding"})),
+        ("reject", "register with neither address nor reserved range", lambda d: hr(d)[0].pop("address")),
         # An address merely past the end of its space is now a validate.py error
         # rather than a schema one: the window depends on addressing[space], and
         # a schema cannot see a sibling section. What stays here is the absurd.
         ("reject", "an address no numbering scheme could reach",
-         lambda d: d["registers"][0].update({"address": 2_000_000})),
-        ("reject", "register carrying nothing and not reserved", lambda d: d["registers"][0].pop("fields")),
+         lambda d: hr(d)[0].update({"address": 2_000_000})),
+        ("reject", "register carrying nothing and not reserved", lambda d: hr(d)[0].pop("fields")),
         ("reject", "reserved range that also carries fields",
-         lambda d: d["registers"].append({"space": "holding", "from": 7, "to": 8,
+         lambda d: hr(d).append({"from": 7, "to": 8,
                                           "reserved": "spare",
                                           "fields": [{"property": "device_type", "encoding": "uint16"}]})),
         ("reject", "reserved range with no prose saying why",
-         lambda d: d["registers"].append({"space": "holding", "from": 7, "to": 8})),
+         lambda d: hr(d).append({"from": 7, "to": 8})),
         ("reject", "multi-field register with no title of its own",
          lambda d: reg_of(d, "error_memory_fault").pop("title")),
         ("reject", "field with both an encoding and a bit",
@@ -153,60 +164,58 @@ def main() -> int:
          lambda d: reg_of(d, "error_memory_fault")["fields"][0].update({"bit": 20})),
         ("reject", "unknown encoding", lambda d: reg_of(d, "device_type")["fields"][0].update({"encoding": "uint12"})),
         ("reject", "field naming no property", lambda d: reg_of(d, "device_type")["fields"][0].pop("property")),
-        ("reject", "unknown key on a register", lambda d: d["registers"][0].update({"decoder": "numerical"})),
+        ("reject", "unknown key on a register", lambda d: hr(d)[0].update({"decoder": "numerical"})),
         ("reject", "function code not in Modbus", lambda d: d["limits"]["supported_fc"].append(99)),
         ("reject", "max_read_words above the Modbus limit", lambda d: d["limits"].update({"max_read_words": 200})),
         ("accept", "a single-field register with no title of its own", lambda d: None),
         ("accept", "a reserved range with prose",
-         lambda d: d["registers"].append({"space": "holding", "from": 7, "to": 8,
+         lambda d: hr(d).append({"from": 7, "to": 8,
                                           "reserved": "Reserved for future interface settings."})),
         ("accept", "a 32-bit value in one field",
-         lambda d: d["registers"].append({"space": "input", "address": 600,
+         lambda d: d["spaces"]["input"]["registers"].append({"address": 600,
                                           "fields": [{"property": "nvm_write_count", "encoding": "uint32"}]})),
         ("accept", "a string spanning registers",
-         lambda d: d["registers"].append({"space": "input", "address": 610, "title": "Serial Number",
+         lambda d: d["spaces"]["input"]["registers"].append({"address": 610, "title": "Serial Number",
                                           "fields": [{"property": "serial_number",
                                                       "encoding": "chars", "count": 8}]})),
-        # ---- A1: per-space addressing bases
-        ("reject", "no addressing section", lambda d: d.pop("addressing")),
-        ("reject", "an empty addressing section", lambda d: d.update({"addressing": {}})),
-        ("reject", "a base on something that is not an address space",
-         lambda d: d["addressing"].update({"registers": 1})),
+        # ---- A1: each space states what its numbering counts from
+        ("reject", "an empty spaces section", lambda d: d.update({"spaces": {}})),
         ("reject", "a base that is not a number",
-         lambda d: d["addressing"].update({"holding": "data_model"})),
-        ("reject", "a negative base", lambda d: d["addressing"].update({"holding": -1})),
-        ("accept", "raw wire offsets", lambda d: d["addressing"].update({"holding": 0})),
+         lambda d: d["spaces"]["holding"].update({"base": "data_model"})),
+        ("reject", "a negative base", lambda d: d["spaces"]["holding"].update({"base": -1})),
+        ("reject", "an unknown key on a space",
+         lambda d: d["spaces"]["holding"].update({"access": "read_write"})),
+        ("accept", "raw wire offsets", lambda d: d["spaces"]["holding"].update({"base": 0})),
         ("accept", "a space numbered differently from the rest",
-         lambda d: d["addressing"].update({"input": 0})),
+         lambda d: d["spaces"]["input"].update({"base": 0})),
         ("accept", "legacy Modicon numbering, transcribed as printed",
-         lambda d: (d["addressing"].update({"holding": 40001}),
+         lambda d: (d["spaces"]["holding"].update({"base": 40001}),
                     [r.update({"address": r["address"] + 40000})
-                     for r in d["registers"] if r["space"] == "holding" and "address" in r],
+                     for r in hr(d) if "address" in r],
                     [r.update({"from": r["from"] + 40000, "to": r["to"] + 40000})
-                     for r in d["registers"] if r["space"] == "holding" and "from" in r],
+                     for r in hr(d) if "from" in r],
                     [p.update({"address": p["address"] + 40000})
                      for p in d["identification"]["registers"] if p["space"] == "holding"])),
 
-        # ---- A2: a coil is a single bit
-        ("accept", "a coil carrying one bit-encoded property",
-         lambda d: d["registers"].append({"space": "coil", "address": 5,
-                                          "fields": [{"property": "supply_fan_enable", "encoding": "bit"}]})),
-        ("reject", "a coil carrying a uint16",
-         lambda d: d["registers"].append({"space": "coil", "address": 5,
-                                          "fields": [{"property": "supply_fan_enable", "encoding": "uint16"}]})),
+        # ---- A2: a coil is a single bit, which since D20 is its shape and not a rule
+        ("accept", "a coil naming the one property it carries",
+         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable"})),
+        ("accept", "a reserved range of coils",
+         lambda d: coil(d, {"from": 10, "to": 20, "reserved": "Spare."})),
+        ("reject", "a coil choosing an encoding, when a coil is one bit",
+         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable",
+                            "encoding": "uint16"})),
         ("reject", "a coil with a bit position, when the address already is one",
-         lambda d: d["registers"].append({"space": "coil", "address": 5,
-                                          "fields": [{"property": "supply_fan_enable", "bit": 0}]})),
-        ("reject", "a coil carrying two properties",
-         lambda d: d["registers"].append({"space": "coil", "address": 5, "title": "Two",
-                                          "fields": [{"property": "a", "encoding": "bit"},
-                                                     {"property": "b", "encoding": "bit"}]})),
+         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable", "bit": 0})),
+        ("reject", "a coil with a fields list, when it carries exactly one property",
+         lambda d: coil(d, {"address": 5, "title": "Two",
+                            "fields": [{"property": "a"}, {"property": "b"}]})),
+        ("reject", "a coil carrying nothing and not reserved", lambda d: coil(d, {"address": 5})),
         ("reject", "a discrete input carrying a float32",
-         lambda d: d["registers"].append({"space": "discrete", "address": 6,
-                                          "fields": [{"property": "mcu_temperature", "encoding": "float32"}]})),
+         lambda d: d["spaces"].update({"discrete": {"base": 1, "registers": [
+             {"address": 6, "property": "mcu_temperature", "encoding": "float32"}]}})),
         ("reject", "a clear_label on a coil, where no set of bits can be clear",
-         lambda d: d["registers"].append({"space": "coil", "address": 5, "clear_label": "OK",
-                                          "fields": [{"property": "supply_fan_enable", "encoding": "bit"}]})),
+         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable", "clear_label": "OK"})),
         ("reject", "encoding 'bit' in a 16-bit register, which says nothing about which bit",
          lambda d: reg_of(d, "device_type")["fields"][0].update({"encoding": "bit"})),
         ("reject", "count on an encoding with no elements",

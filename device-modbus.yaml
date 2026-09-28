@@ -1,11 +1,12 @@
 # yaml-language-server: $schema=device-modbus.schema.json
 #
-# PROTOCOL LAYER: the Modbus register map. A register is an entity here, not
-# an attribute of a property: it owns its address, its name, its prose and its
-# access, and its fields say which properties it carries. That is what lets one
-# register carry eight bools, one property span two registers, and a range be
-# reserved with no property at all -- none of which a per-property binding
-# could express (D15).
+# PROTOCOL LAYER: the Modbus register map. An address space is an entity here,
+# and owns the numbering its registers are written in and the registers
+# themselves. A register is an entity too: it owns its address, its name, its
+# prose and its access, and its fields say which properties it carries. That is
+# what lets one register carry eight bools, one property span two registers, and
+# a range be reserved with no property at all -- none of which a per-property
+# binding could express (D15).
 #
 # Properties are referenced by name from device-properties.yaml.
 #
@@ -17,8 +18,8 @@
 # silently change the wire format (D16).
 #
 # This document is meant to stand on its own: which device it describes, how
-# its addresses are numbered, how a client recognises it on the bus, and what
-# the transport tolerates are all stated here rather than assumed. That is what
+# each space numbers its addresses, how a client recognises it on the bus, and
+# what the transport tolerates are all stated here rather than assumed. That is what
 # makes it usable for a third-party product, where there is no semantic
 # document and no firmware source to fall back on.
 #
@@ -47,14 +48,6 @@ device:
   firmware_version:
     from: "1.0"               # no 'to': this map holds for 1.0 and later
 
-# For each space used below, the address that would be written here for wire
-# offset 0. So offset = address - addressing[space]: holding 1 is read with FC3
-# at offset 0. Stating it is the whole point -- the same file read under the
-# other convention is silently off by one everywhere. Write 0 to use raw
-# offsets, or 40001 / 30001 to transcribe a legacy map exactly as printed.
-addressing:
-  holding: 1
-  input: 1
 
 # How a client confirms that whatever answered at some slave address is this
 # device. Read-only, and every rule must hold; a rule that cannot be read at all
@@ -130,1031 +123,831 @@ limits:
   gaps_readable: true
   turnaround_ms: 5
 
-registers:
+# Each space states the address it would write for wire offset 0, so
+# offset = address - base. Write 1 for the register numbers a datasheet prints,
+# 0 to write raw offsets, or 40001 / 30001 to transcribe a legacy map exactly as
+# printed. Stating it is the whole point: the same file read under the other
+# convention is silently off by one everywhere.
+spaces:
 
-  # ------------------------- holding registers -------------------------
+  holding:
+    base: 1
+    registers:
 
-  - space: holding
-    address: 1
-    fields: [ { property: server_slave_address, encoding: uint16 } ]
+      - address: 1
+        fields: [ { property: server_slave_address, encoding: uint16 } ]
 
-  - space: holding
-    address: 2
-    fields: [ { property: server_baud_rate, encoding: uint16 } ]
+      - address: 2
+        fields: [ { property: server_baud_rate, encoding: uint16 } ]
 
-  - space: holding
-    address: 3
-    fields: [ { property: server_parity, encoding: uint16 } ]
+      - address: 3
+        fields: [ { property: server_parity, encoding: uint16 } ]
 
-  - space: holding
-    address: 4
-    fields: [ { property: device_type, encoding: uint16 } ]
+      - address: 4
+        fields: [ { property: device_type, encoding: uint16 } ]
 
-  - space: holding
-    address: 5
-    fields: [ { property: hardware_version, encoding: uint16 } ]
+      - address: 5
+        fields: [ { property: hardware_version, encoding: uint16 } ]
 
-  - space: holding
-    address: 6
-    fields: [ { property: firmware_version, encoding: uint16 } ]
+      - address: 6
+        fields: [ { property: firmware_version, encoding: uint16 } ]
 
-  - space: holding
-    address: 9
-    fields: [ { property: server_termination_resistor, encoding: uint16 } ]
+      - address: 9
+        fields: [ { property: server_termination_resistor, encoding: uint16 } ]
 
-  - space: holding
-    address: 10
-    fields: [ { property: modbus_registers_reset, encoding: uint16 } ]
+      - address: 10
+        fields: [ { property: modbus_registers_reset, encoding: uint16 } ]
 
-  - space: holding
-    address: 11
-    fields: [ { property: client_enable, encoding: uint16 } ]
+      - address: 11
+        fields: [ { property: client_enable, encoding: uint16 } ]
 
-  - space: holding
-    address: 12
-    fields: [ { property: client_baud_rate, encoding: uint16 } ]
+      - address: 12
+        fields: [ { property: client_baud_rate, encoding: uint16 } ]
 
-  - space: holding
-    address: 13
-    fields: [ { property: client_parity, encoding: uint16 } ]
+      - address: 13
+        fields: [ { property: client_parity, encoding: uint16 } ]
 
-  - space: holding
-    address: 14
-    fields: [ { property: client_poll_interval, encoding: uint16 } ]
+      - address: 14
+        fields: [ { property: client_poll_interval, encoding: uint16 } ]
 
-  - space: holding
-    address: 15
-    fields: [ { property: client_response_timeout, encoding: uint16 } ]
+      - address: 15
+        fields: [ { property: client_response_timeout, encoding: uint16 } ]
 
-  - space: holding
-    address: 16
-    fields: [ { property: client_retry_count, encoding: uint16 } ]
+      - address: 16
+        fields: [ { property: client_retry_count, encoding: uint16 } ]
 
-  - space: holding
-    address: 21
-    fields: [ { property: left_right_swap, encoding: uint16 } ]
+      - address: 21
+        fields: [ { property: left_right_swap, encoding: uint16 } ]
 
-  - space: holding
-    address: 22
-    fields: [ { property: operating_mode, encoding: uint16 } ]
+      - address: 22
+        fields: [ { property: operating_mode, encoding: uint16 } ]
 
-  - space: holding
-    address: 23
-    fields: [ { property: ventilation_level, encoding: uint16 } ]
+      - address: 23
+        fields: [ { property: ventilation_level, encoding: uint16 } ]
 
-  - space: holding
-    address: 24
-    fields: [ { property: co2_setpoint, encoding: uint16 } ]
+      - address: 24
+        fields: [ { property: co2_setpoint, encoding: uint16 } ]
 
-  - space: holding
-    address: 25
-    fields: [ { property: humidity_setpoint, encoding: uint16 } ]
+      - address: 25
+        fields: [ { property: humidity_setpoint, encoding: uint16 } ]
 
-  - space: holding
-    address: 26
-    fields: [ { property: modbus_safety_timeout, encoding: uint16 } ]
+      - address: 26
+        fields: [ { property: modbus_safety_timeout, encoding: uint16 } ]
 
-  - space: holding
-    address: 27
-    fields: [ { property: sensor_bus_rescan, encoding: uint16 } ]
+      - address: 27
+        fields: [ { property: sensor_bus_rescan, encoding: uint16 } ]
 
-  - space: holding
-    address: 31
-    fields: [ { property: outdoor_air_temperature_source, encoding: uint16 } ]
+      - address: 31
+        fields: [ { property: outdoor_air_temperature_source, encoding: uint16 } ]
 
-  - space: holding
-    address: 32
-    fields: [ { property: supply_air_temperature_source, encoding: uint16 } ]
+      - address: 32
+        fields: [ { property: supply_air_temperature_source, encoding: uint16 } ]
 
-  - space: holding
-    address: 33
-    fields: [ { property: extract_air_temperature_source, encoding: uint16 } ]
+      - address: 33
+        fields: [ { property: extract_air_temperature_source, encoding: uint16 } ]
 
-  - space: holding
-    address: 34
-    fields: [ { property: exhaust_air_temperature_source, encoding: uint16 } ]
-
-  - space: holding
-    address: 41
-    fields: [ { property: preheater_installed, encoding: uint16 } ]
-
-  - space: holding
-    address: 42
-    fields: [ { property: preheater_control_mode, encoding: uint16 } ]
-
-  - space: holding
-    address: 43
-    fields: [ { property: preheater_output_type, encoding: uint16 } ]
-
-  - space: holding
-    address: 44
-    fields: [ { property: preheater_minimum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 45
-    fields: [ { property: preheater_maximum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 46
-    fields: [ { property: preheater_frost_protection_setpoint, encoding: int16 } ]
-
-  - space: holding
-    address: 47
-    fields: [ { property: preheater_supply_temperature_setpoint, encoding: int16 } ]
-
-  - space: holding
-    address: 51
-    fields: [ { property: bypass_control_mode, encoding: uint16 } ]
-
-  - space: holding
-    address: 52
-    fields: [ { property: bypass_output_type, encoding: uint16 } ]
-
-  - space: holding
-    address: 53
-    fields: [ { property: bypass_minimum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 54
-    fields: [ { property: bypass_maximum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 55
-    fields: [ { property: bypass_outdoor_temperature_threshold, encoding: int16 } ]
-
-  - space: holding
-    address: 56
-    fields: [ { property: bypass_extract_temperature_threshold, encoding: int16 } ]
-
-  - space: holding
-    address: 57
-    fields: [ { property: bypass_manual_position, encoding: uint16 } ]
-
-  - space: holding
-    address: 61
-    fields: [ { property: filter_monitoring_mode, encoding: uint16 } ]
-
-  - space: holding
-    address: 62
-    fields: [ { property: filter_replacement_interval, encoding: uint16 } ]
-
-  - space: holding
-    address: 63
-    fields: [ { property: filter_differential_pressure_threshold, encoding: uint16 } ]
-
-  - space: holding
-    address: 64
-    fields: [ { property: filter_counter_reset, encoding: uint16 } ]
-
-  - space: holding
-    address: 101
-    fields: [ { property: supply_fan_control_source, encoding: uint16 } ]
-
-  - space: holding
-    address: 102
-    fields: [ { property: supply_fan_analog_output_type, encoding: uint16 } ]
-
-  - space: holding
-    address: 103
-    fields: [ { property: supply_fan_minimum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 104
-    fields: [ { property: supply_fan_maximum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 105
-    fields: [ { property: supply_fan_start_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 106
-    fields: [ { property: supply_fan_kickstart_control, encoding: uint16 } ]
-
-  - space: holding
-    address: 107
-    fields: [ { property: supply_fan_kickstart_time, encoding: uint16 } ]
-
-  - space: holding
-    address: 108
-    fields: [ { property: supply_fan_modbus_slave_address, encoding: uint16 } ]
-
-  - space: holding
-    address: 109
-    fields: [ { property: supply_fan_modbus_speed_register, encoding: uint16 } ]
-
-  - space: holding
-    address: 110
-    fields: [ { property: supply_fan_overwrite_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 111
-    fields: [ { property: supply_fan_overwrite_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 116
-    fields: [ { property: supply_digital_input_function, encoding: uint16 } ]
-
-  - space: holding
-    address: 117
-    fields: [ { property: supply_digital_input_polarity, encoding: uint16 } ]
-
-  - space: holding
-    address: 131
-    fields: [ { property: extract_fan_control_source, encoding: uint16 } ]
-
-  - space: holding
-    address: 132
-    fields: [ { property: extract_fan_analog_output_type, encoding: uint16 } ]
-
-  - space: holding
-    address: 133
-    fields: [ { property: extract_fan_minimum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 134
-    fields: [ { property: extract_fan_maximum_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 135
-    fields: [ { property: extract_fan_start_output_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 136
-    fields: [ { property: extract_fan_kickstart_control, encoding: uint16 } ]
-
-  - space: holding
-    address: 137
-    fields: [ { property: extract_fan_kickstart_time, encoding: uint16 } ]
-
-  - space: holding
-    address: 138
-    fields: [ { property: extract_fan_modbus_slave_address, encoding: uint16 } ]
-
-  - space: holding
-    address: 139
-    fields: [ { property: extract_fan_modbus_speed_register, encoding: uint16 } ]
-
-  - space: holding
-    address: 140
-    fields: [ { property: extract_fan_overwrite_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 141
-    fields: [ { property: extract_fan_overwrite_value, encoding: uint16 } ]
-
-  - space: holding
-    address: 146
-    fields: [ { property: extract_digital_input_function, encoding: uint16 } ]
-
-  - space: holding
-    address: 147
-    fields: [ { property: extract_digital_input_polarity, encoding: uint16 } ]
-
-  - space: holding
-    address: 201
-    fields: [ { property: supply_ch1_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 202
-    fields: [ { property: supply_ch1_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 203
-    fields: [ { property: supply_ch1_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 204
-    fields: [ { property: supply_ch1_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 205
-    fields: [ { property: supply_ch1_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 206
-    fields: [ { property: supply_ch1_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 211
-    fields: [ { property: supply_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 212
-    fields: [ { property: supply_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 213
-    fields: [ { property: supply_ch1_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 214
-    fields: [ { property: supply_ch1_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 221
-    fields: [ { property: supply_ch2_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 222
-    fields: [ { property: supply_ch2_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 223
-    fields: [ { property: supply_ch2_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 224
-    fields: [ { property: supply_ch2_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 225
-    fields: [ { property: supply_ch2_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 226
-    fields: [ { property: supply_ch2_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 231
-    fields: [ { property: supply_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 232
-    fields: [ { property: supply_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 233
-    fields: [ { property: supply_ch2_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 234
-    fields: [ { property: supply_ch2_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 241
-    fields: [ { property: supply_ch3_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 242
-    fields: [ { property: supply_ch3_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 243
-    fields: [ { property: supply_ch3_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 244
-    fields: [ { property: supply_ch3_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 245
-    fields: [ { property: supply_ch3_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 246
-    fields: [ { property: supply_ch3_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 251
-    fields: [ { property: supply_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 252
-    fields: [ { property: supply_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 253
-    fields: [ { property: supply_ch3_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 254
-    fields: [ { property: supply_ch3_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 261
-    fields: [ { property: extract_ch1_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 262
-    fields: [ { property: extract_ch1_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 263
-    fields: [ { property: extract_ch1_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 264
-    fields: [ { property: extract_ch1_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 265
-    fields: [ { property: extract_ch1_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 266
-    fields: [ { property: extract_ch1_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 271
-    fields: [ { property: extract_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+      - address: 34
+        fields: [ { property: exhaust_air_temperature_source, encoding: uint16 } ]
 
-  - space: holding
-    address: 272
-    fields: [ { property: extract_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 273
-    fields: [ { property: extract_ch1_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 274
-    fields: [ { property: extract_ch1_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 281
-    fields: [ { property: extract_ch2_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 282
-    fields: [ { property: extract_ch2_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 283
-    fields: [ { property: extract_ch2_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 284
-    fields: [ { property: extract_ch2_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 285
-    fields: [ { property: extract_ch2_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 286
-    fields: [ { property: extract_ch2_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 291
-    fields: [ { property: extract_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 292
-    fields: [ { property: extract_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 293
-    fields: [ { property: extract_ch2_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 294
-    fields: [ { property: extract_ch2_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 301
-    fields: [ { property: extract_ch3_enable, encoding: uint16 } ]
-
-  - space: holding
-    address: 302
-    fields: [ { property: extract_ch3_temperature_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 303
-    fields: [ { property: extract_ch3_relative_humidity_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 304
-    fields: [ { property: extract_ch3_voc_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 305
-    fields: [ { property: extract_ch3_carbon_dioxide_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 306
-    fields: [ { property: extract_ch3_barometric_pressure_correction, encoding: int16 } ]
-
-  - space: holding
-    address: 311
-    fields: [ { property: extract_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 312
-    fields: [ { property: extract_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 313
-    fields: [ { property: extract_ch3_voc_alert_1_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 314
-    fields: [ { property: extract_ch3_voc_alert_2_level, encoding: uint16 } ]
-
-  - space: holding
-    address: 990
-    fields: [ { property: device_reset, encoding: uint16 } ]
-
-  # ------------------------- input registers -------------------------
-
-  - space: input
-    address: 1
-    title: "Device Status - Errors"
-    description: >-
-      Fault conditions that stop normal operation. Any bit set here is
-      reflected in application_state.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: error_supply_voltage_fault }
-      - { bit: 1, property: error_internal_voltage_fault }
-      - { bit: 2, property: error_memory_fault }
-      - { bit: 3, property: error_supply_fan_fault }
-      - { bit: 4, property: error_extract_fan_fault }
-      - { bit: 5, property: error_sensor_bus_fault }
-      - { bit: 6, property: error_preheater_fault }
-      - { bit: 7, property: error_bypass_fault }
-
-  - space: input
-    address: 2
-    title: "Device Status - Warnings"
-    description: >-
-      Conditions that degrade operation or need attention but do not stop
-      ventilation.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: warning_supply_voltage_warning }
-      - { bit: 1, property: warning_internal_voltage_warning }
-      - { bit: 2, property: warning_sensor_replacement_due }
-      - { bit: 3, property: warning_client_interface_degraded }
-      - { bit: 4, property: warning_filter_replacement_due }
-      - { bit: 5, property: warning_efficiency_below_expected }
-
-  - space: input
-    address: 3
-    fields: [ { property: supply_voltage, encoding: uint16 } ]
-
-  - space: input
-    address: 11
-    fields: [ { property: client_state, encoding: uint16 } ]
-
-  - space: input
-    address: 12
-    fields: [ { property: application_state, encoding: uint16 } ]
-
-  - space: input
-    address: 13
-    fields: [ { property: sensor_bus_state, encoding: uint16 } ]
-
-  - space: input
-    address: 21
-    fields: [ { property: outdoor_air_temperature, encoding: int16 } ]
-
-  - space: input
-    address: 22
-    fields: [ { property: supply_air_temperature, encoding: int16 } ]
-
-  - space: input
-    address: 23
-    fields: [ { property: extract_air_temperature, encoding: int16 } ]
-
-  - space: input
-    address: 24
-    fields: [ { property: exhaust_air_temperature, encoding: int16 } ]
-
-  - space: input
-    address: 25
-    fields: [ { property: heat_recovery_efficiency, encoding: uint16 } ]
-
-  - space: input
-    address: 31
-    fields: [ { property: preheater_output_value, encoding: uint16 } ]
-
-  - space: input
-    address: 32
-    title: "Pre-heater State"
-    description: >-
-      Pre-heater diagnostics. Meaningful only on units where the pre-heater
-      option is fitted.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: preheater_fault }
-      - { bit: 1, property: preheater_thermal_cutout_open }
-      - { bit: 2, property: preheater_output_saturated }
-      - { bit: 3, property: preheater_frost_protection_active }
-
-  - space: input
-    address: 41
-    fields: [ { property: bypass_position, encoding: uint16 } ]
-
-  - space: input
-    address: 42
-    title: "Bypass State"
-    description: >-
-      Bypass damper diagnostics, including the two conditions under which the
-      unit holds the damper closed regardless of the control mode.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: bypass_damper_fault }
-      - { bit: 1, property: bypass_position_feedback_missing }
-      - { bit: 2, property: bypass_held_closed_by_frost_protection }
-      - { bit: 3, property: bypass_held_closed_by_missing_temperature }
-
-  - space: input
-    address: 51
-    fields: [ { property: filter_elapsed_time, encoding: uint16 } ]
-
-  - space: input
-    address: 52
-    fields: [ { property: filter_differential_pressure, encoding: uint16 } ]
-
-  - space: input
-    address: 53
-    title: "Filter State"
-    description: >-
-      Filter condition as judged by the selected monitoring mode.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: filter_replacement_due }
-      - { bit: 1, property: filter_replacement_overdue }
-      - { bit: 2, property: filter_pressure_sensor_fault }
-
-  - space: input
-    address: 101
-    fields: [ { property: supply_fan_output_value, encoding: uint16 } ]
-
-  - space: input
-    address: 102
-    fields: [ { property: supply_fan_speed, encoding: uint16 } ]
-
-  - space: input
-    address: 103
-    title: "Supply Fan State"
-    description: >-
-      Fault and diagnostic bits for the supply fan channel, whichever control
-      source is selected.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: supply_fan_fault }
-      - { bit: 1, property: supply_fan_tacho_missing }
-      - { bit: 2, property: supply_fan_modbus_timeout }
-      - { bit: 3, property: supply_fan_blocked_rotor }
-
-  - space: input
-    address: 104
-    fields: [ { property: supply_digital_input_state, encoding: uint16 } ]
-
-  - space: input
-    address: 131
-    fields: [ { property: extract_fan_output_value, encoding: uint16 } ]
-
-  - space: input
-    address: 132
-    fields: [ { property: extract_fan_speed, encoding: uint16 } ]
-
-  - space: input
-    address: 133
-    title: "Extract Fan State"
-    description: >-
-      Fault and diagnostic bits for the extract fan channel, whichever control
-      source is selected.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: extract_fan_fault }
-      - { bit: 1, property: extract_fan_tacho_missing }
-      - { bit: 2, property: extract_fan_modbus_timeout }
-      - { bit: 3, property: extract_fan_blocked_rotor }
-
-  - space: input
-    address: 134
-    fields: [ { property: extract_digital_input_state, encoding: uint16 } ]
-
-  - space: input
-    address: 201
-    title: "Supply Channel 1 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 1 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: supply_ch1_provides_temperature }
-      - { bit: 1, property: supply_ch1_provides_relative_humidity }
-      - { bit: 2, property: supply_ch1_provides_voc }
-      - { bit: 3, property: supply_ch1_provides_carbon_dioxide }
-      - { bit: 4, property: supply_ch1_provides_barometric_pressure }
-
-  - space: input
-    address: 202
-    title: "Supply Channel 1 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 1. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: supply_ch1_sensor_problem }
-      - { bit: 1, property: supply_ch1_sensor_replacement }
-      - { bit: 2, property: supply_ch1_sensor_preheating }
-      - { bit: 3, property: supply_ch1_sensor_not_connected }
-
-  - space: input
-    address: 203
-    fields: [ { property: supply_ch1_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 204
-    fields: [ { property: supply_ch1_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 205
-    fields: [ { property: supply_ch1_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 206
-    fields: [ { property: supply_ch1_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 207
-    fields: [ { property: supply_ch1_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 208
-    fields: [ { property: supply_ch1_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 221
-    title: "Supply Channel 2 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 2 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: supply_ch2_provides_temperature }
-      - { bit: 1, property: supply_ch2_provides_relative_humidity }
-      - { bit: 2, property: supply_ch2_provides_voc }
-      - { bit: 3, property: supply_ch2_provides_carbon_dioxide }
-      - { bit: 4, property: supply_ch2_provides_barometric_pressure }
-
-  - space: input
-    address: 222
-    title: "Supply Channel 2 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 2. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: supply_ch2_sensor_problem }
-      - { bit: 1, property: supply_ch2_sensor_replacement }
-      - { bit: 2, property: supply_ch2_sensor_preheating }
-      - { bit: 3, property: supply_ch2_sensor_not_connected }
-
-  - space: input
-    address: 223
-    fields: [ { property: supply_ch2_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 224
-    fields: [ { property: supply_ch2_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 225
-    fields: [ { property: supply_ch2_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 226
-    fields: [ { property: supply_ch2_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 227
-    fields: [ { property: supply_ch2_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 228
-    fields: [ { property: supply_ch2_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 241
-    title: "Supply Channel 3 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on supply channel 3 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: supply_ch3_provides_temperature }
-      - { bit: 1, property: supply_ch3_provides_relative_humidity }
-      - { bit: 2, property: supply_ch3_provides_voc }
-      - { bit: 3, property: supply_ch3_provides_carbon_dioxide }
-      - { bit: 4, property: supply_ch3_provides_barometric_pressure }
-
-  - space: input
-    address: 242
-    title: "Supply Channel 3 - Sensor State"
-    description: >-
-      Condition of the sensor module on supply channel 3. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: supply_ch3_sensor_problem }
-      - { bit: 1, property: supply_ch3_sensor_replacement }
-      - { bit: 2, property: supply_ch3_sensor_preheating }
-      - { bit: 3, property: supply_ch3_sensor_not_connected }
-
-  - space: input
-    address: 243
-    fields: [ { property: supply_ch3_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 244
-    fields: [ { property: supply_ch3_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 245
-    fields: [ { property: supply_ch3_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 246
-    fields: [ { property: supply_ch3_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 247
-    fields: [ { property: supply_ch3_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 248
-    fields: [ { property: supply_ch3_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 261
-    title: "Extract Channel 1 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 1 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: extract_ch1_provides_temperature }
-      - { bit: 1, property: extract_ch1_provides_relative_humidity }
-      - { bit: 2, property: extract_ch1_provides_voc }
-      - { bit: 3, property: extract_ch1_provides_carbon_dioxide }
-      - { bit: 4, property: extract_ch1_provides_barometric_pressure }
-
-  - space: input
-    address: 262
-    title: "Extract Channel 1 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 1. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: extract_ch1_sensor_problem }
-      - { bit: 1, property: extract_ch1_sensor_replacement }
-      - { bit: 2, property: extract_ch1_sensor_preheating }
-      - { bit: 3, property: extract_ch1_sensor_not_connected }
-
-  - space: input
-    address: 263
-    fields: [ { property: extract_ch1_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 264
-    fields: [ { property: extract_ch1_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 265
-    fields: [ { property: extract_ch1_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 266
-    fields: [ { property: extract_ch1_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 267
-    fields: [ { property: extract_ch1_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 268
-    fields: [ { property: extract_ch1_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 281
-    title: "Extract Channel 2 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 2 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: extract_ch2_provides_temperature }
-      - { bit: 1, property: extract_ch2_provides_relative_humidity }
-      - { bit: 2, property: extract_ch2_provides_voc }
-      - { bit: 3, property: extract_ch2_provides_carbon_dioxide }
-      - { bit: 4, property: extract_ch2_provides_barometric_pressure }
-
-  - space: input
-    address: 282
-    title: "Extract Channel 2 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 2. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: extract_ch2_sensor_problem }
-      - { bit: 1, property: extract_ch2_sensor_replacement }
-      - { bit: 2, property: extract_ch2_sensor_preheating }
-      - { bit: 3, property: extract_ch2_sensor_not_connected }
-
-  - space: input
-    address: 283
-    fields: [ { property: extract_ch2_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 284
-    fields: [ { property: extract_ch2_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 285
-    fields: [ { property: extract_ch2_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 286
-    fields: [ { property: extract_ch2_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 287
-    fields: [ { property: extract_ch2_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 288
-    fields: [ { property: extract_ch2_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 301
-    title: "Extract Channel 3 - Sensor Capability"
-    description: >-
-      Which measurands the sensor module on extract channel 3 reports.
-      Discovered at startup and after a bus rescan; a channel may report
-      several at once.
-    clear_label: "No measurands reported"
-    fields:
-      - { bit: 0, property: extract_ch3_provides_temperature }
-      - { bit: 1, property: extract_ch3_provides_relative_humidity }
-      - { bit: 2, property: extract_ch3_provides_voc }
-      - { bit: 3, property: extract_ch3_provides_carbon_dioxide }
-      - { bit: 4, property: extract_ch3_provides_barometric_pressure }
-
-  - space: input
-    address: 302
-    title: "Extract Channel 3 - Sensor State"
-    description: >-
-      Condition of the sensor module on extract channel 3. Its readings are
-      only trustworthy while none of these bits is set.
-    clear_label: "OK"
-    fields:
-      - { bit: 0, property: extract_ch3_sensor_problem }
-      - { bit: 1, property: extract_ch3_sensor_replacement }
-      - { bit: 2, property: extract_ch3_sensor_preheating }
-      - { bit: 3, property: extract_ch3_sensor_not_connected }
-
-  - space: input
-    address: 303
-    fields: [ { property: extract_ch3_alerts, encoding: uint16 } ]
-
-  - space: input
-    address: 304
-    fields: [ { property: extract_ch3_temperature_level, encoding: int16 } ]
-
-  - space: input
-    address: 305
-    fields: [ { property: extract_ch3_relative_humidity_level, encoding: uint16 } ]
-
-  - space: input
-    address: 306
-    fields: [ { property: extract_ch3_voc_level, encoding: uint16 } ]
-
-  - space: input
-    address: 307
-    fields: [ { property: extract_ch3_carbon_dioxide_level, encoding: uint16 } ]
-
-  - space: input
-    address: 308
-    fields: [ { property: extract_ch3_barometric_pressure_level, encoding: uint16 } ]
-
-  - space: input
-    address: 501
-    fields: [ { property: mcu_temperature, encoding: int16 } ]
-
-  - space: input
-    address: 504
-    fields: [ { property: lifetime_days, encoding: uint16 } ]
-
-  - space: input
-    address: 505
-    fields: [ { property: lifetime_minutes, encoding: uint16 } ]
-
-  - space: input
-    address: 506
-    fields: [ { property: internal_voltage_12v, encoding: uint16 } ]
-
-  - space: input
-    address: 507
-    fields: [ { property: internal_voltage_3v3, encoding: uint16 } ]
+      - address: 41
+        fields: [ { property: preheater_installed, encoding: uint16 } ]
+
+      - address: 42
+        fields: [ { property: preheater_control_mode, encoding: uint16 } ]
+
+      - address: 43
+        fields: [ { property: preheater_output_type, encoding: uint16 } ]
+
+      - address: 44
+        fields: [ { property: preheater_minimum_output_value, encoding: uint16 } ]
+
+      - address: 45
+        fields: [ { property: preheater_maximum_output_value, encoding: uint16 } ]
+
+      - address: 46
+        fields: [ { property: preheater_frost_protection_setpoint, encoding: int16 } ]
+
+      - address: 47
+        fields: [ { property: preheater_supply_temperature_setpoint, encoding: int16 } ]
+
+      - address: 51
+        fields: [ { property: bypass_control_mode, encoding: uint16 } ]
+
+      - address: 52
+        fields: [ { property: bypass_output_type, encoding: uint16 } ]
+
+      - address: 53
+        fields: [ { property: bypass_minimum_output_value, encoding: uint16 } ]
+
+      - address: 54
+        fields: [ { property: bypass_maximum_output_value, encoding: uint16 } ]
+
+      - address: 55
+        fields: [ { property: bypass_outdoor_temperature_threshold, encoding: int16 } ]
+
+      - address: 56
+        fields: [ { property: bypass_extract_temperature_threshold, encoding: int16 } ]
+
+      - address: 57
+        fields: [ { property: bypass_manual_position, encoding: uint16 } ]
+
+      - address: 61
+        fields: [ { property: filter_monitoring_mode, encoding: uint16 } ]
+
+      - address: 62
+        fields: [ { property: filter_replacement_interval, encoding: uint16 } ]
+
+      - address: 63
+        fields: [ { property: filter_differential_pressure_threshold, encoding: uint16 } ]
+
+      - address: 64
+        fields: [ { property: filter_counter_reset, encoding: uint16 } ]
+
+      - address: 101
+        fields: [ { property: supply_fan_control_source, encoding: uint16 } ]
+
+      - address: 102
+        fields: [ { property: supply_fan_analog_output_type, encoding: uint16 } ]
+
+      - address: 103
+        fields: [ { property: supply_fan_minimum_output_value, encoding: uint16 } ]
+
+      - address: 104
+        fields: [ { property: supply_fan_maximum_output_value, encoding: uint16 } ]
+
+      - address: 105
+        fields: [ { property: supply_fan_start_output_value, encoding: uint16 } ]
+
+      - address: 106
+        fields: [ { property: supply_fan_kickstart_control, encoding: uint16 } ]
+
+      - address: 107
+        fields: [ { property: supply_fan_kickstart_time, encoding: uint16 } ]
+
+      - address: 108
+        fields: [ { property: supply_fan_modbus_slave_address, encoding: uint16 } ]
+
+      - address: 109
+        fields: [ { property: supply_fan_modbus_speed_register, encoding: uint16 } ]
+
+      - address: 110
+        fields: [ { property: supply_fan_overwrite_enable, encoding: uint16 } ]
+
+      - address: 111
+        fields: [ { property: supply_fan_overwrite_value, encoding: uint16 } ]
+
+      - address: 116
+        fields: [ { property: supply_digital_input_function, encoding: uint16 } ]
+
+      - address: 117
+        fields: [ { property: supply_digital_input_polarity, encoding: uint16 } ]
+
+      - address: 131
+        fields: [ { property: extract_fan_control_source, encoding: uint16 } ]
+
+      - address: 132
+        fields: [ { property: extract_fan_analog_output_type, encoding: uint16 } ]
+
+      - address: 133
+        fields: [ { property: extract_fan_minimum_output_value, encoding: uint16 } ]
+
+      - address: 134
+        fields: [ { property: extract_fan_maximum_output_value, encoding: uint16 } ]
+
+      - address: 135
+        fields: [ { property: extract_fan_start_output_value, encoding: uint16 } ]
+
+      - address: 136
+        fields: [ { property: extract_fan_kickstart_control, encoding: uint16 } ]
+
+      - address: 137
+        fields: [ { property: extract_fan_kickstart_time, encoding: uint16 } ]
+
+      - address: 138
+        fields: [ { property: extract_fan_modbus_slave_address, encoding: uint16 } ]
+
+      - address: 139
+        fields: [ { property: extract_fan_modbus_speed_register, encoding: uint16 } ]
+
+      - address: 140
+        fields: [ { property: extract_fan_overwrite_enable, encoding: uint16 } ]
+
+      - address: 141
+        fields: [ { property: extract_fan_overwrite_value, encoding: uint16 } ]
+
+      - address: 146
+        fields: [ { property: extract_digital_input_function, encoding: uint16 } ]
+
+      - address: 147
+        fields: [ { property: extract_digital_input_polarity, encoding: uint16 } ]
+
+      - address: 201
+        fields: [ { property: supply_ch1_enable, encoding: uint16 } ]
+
+      - address: 202
+        fields: [ { property: supply_ch1_temperature_correction, encoding: int16 } ]
+
+      - address: 203
+        fields: [ { property: supply_ch1_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 204
+        fields: [ { property: supply_ch1_voc_correction, encoding: int16 } ]
+
+      - address: 205
+        fields: [ { property: supply_ch1_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 206
+        fields: [ { property: supply_ch1_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 211
+        fields: [ { property: supply_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 212
+        fields: [ { property: supply_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 213
+        fields: [ { property: supply_ch1_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 214
+        fields: [ { property: supply_ch1_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 221
+        fields: [ { property: supply_ch2_enable, encoding: uint16 } ]
+
+      - address: 222
+        fields: [ { property: supply_ch2_temperature_correction, encoding: int16 } ]
+
+      - address: 223
+        fields: [ { property: supply_ch2_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 224
+        fields: [ { property: supply_ch2_voc_correction, encoding: int16 } ]
+
+      - address: 225
+        fields: [ { property: supply_ch2_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 226
+        fields: [ { property: supply_ch2_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 231
+        fields: [ { property: supply_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 232
+        fields: [ { property: supply_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 233
+        fields: [ { property: supply_ch2_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 234
+        fields: [ { property: supply_ch2_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 241
+        fields: [ { property: supply_ch3_enable, encoding: uint16 } ]
+
+      - address: 242
+        fields: [ { property: supply_ch3_temperature_correction, encoding: int16 } ]
+
+      - address: 243
+        fields: [ { property: supply_ch3_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 244
+        fields: [ { property: supply_ch3_voc_correction, encoding: int16 } ]
+
+      - address: 245
+        fields: [ { property: supply_ch3_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 246
+        fields: [ { property: supply_ch3_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 251
+        fields: [ { property: supply_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 252
+        fields: [ { property: supply_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 253
+        fields: [ { property: supply_ch3_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 254
+        fields: [ { property: supply_ch3_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 261
+        fields: [ { property: extract_ch1_enable, encoding: uint16 } ]
+
+      - address: 262
+        fields: [ { property: extract_ch1_temperature_correction, encoding: int16 } ]
+
+      - address: 263
+        fields: [ { property: extract_ch1_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 264
+        fields: [ { property: extract_ch1_voc_correction, encoding: int16 } ]
+
+      - address: 265
+        fields: [ { property: extract_ch1_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 266
+        fields: [ { property: extract_ch1_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 271
+        fields: [ { property: extract_ch1_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 272
+        fields: [ { property: extract_ch1_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 273
+        fields: [ { property: extract_ch1_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 274
+        fields: [ { property: extract_ch1_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 281
+        fields: [ { property: extract_ch2_enable, encoding: uint16 } ]
+
+      - address: 282
+        fields: [ { property: extract_ch2_temperature_correction, encoding: int16 } ]
+
+      - address: 283
+        fields: [ { property: extract_ch2_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 284
+        fields: [ { property: extract_ch2_voc_correction, encoding: int16 } ]
+
+      - address: 285
+        fields: [ { property: extract_ch2_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 286
+        fields: [ { property: extract_ch2_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 291
+        fields: [ { property: extract_ch2_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 292
+        fields: [ { property: extract_ch2_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 293
+        fields: [ { property: extract_ch2_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 294
+        fields: [ { property: extract_ch2_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 301
+        fields: [ { property: extract_ch3_enable, encoding: uint16 } ]
+
+      - address: 302
+        fields: [ { property: extract_ch3_temperature_correction, encoding: int16 } ]
+
+      - address: 303
+        fields: [ { property: extract_ch3_relative_humidity_correction, encoding: int16 } ]
+
+      - address: 304
+        fields: [ { property: extract_ch3_voc_correction, encoding: int16 } ]
+
+      - address: 305
+        fields: [ { property: extract_ch3_carbon_dioxide_correction, encoding: int16 } ]
+
+      - address: 306
+        fields: [ { property: extract_ch3_barometric_pressure_correction, encoding: int16 } ]
+
+      - address: 311
+        fields: [ { property: extract_ch3_carbon_dioxide_alert_1_level, encoding: uint16 } ]
+
+      - address: 312
+        fields: [ { property: extract_ch3_carbon_dioxide_alert_2_level, encoding: uint16 } ]
+
+      - address: 313
+        fields: [ { property: extract_ch3_voc_alert_1_level, encoding: uint16 } ]
+
+      - address: 314
+        fields: [ { property: extract_ch3_voc_alert_2_level, encoding: uint16 } ]
+
+      - address: 990
+        fields: [ { property: device_reset, encoding: uint16 } ]
+
+  input:
+    base: 1
+    registers:
+
+      - address: 1
+        title: "Device Status - Errors"
+        description: >-
+          Fault conditions that stop normal operation. Any bit set here is
+          reflected in application_state.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: error_supply_voltage_fault }
+          - { bit: 1, property: error_internal_voltage_fault }
+          - { bit: 2, property: error_memory_fault }
+          - { bit: 3, property: error_supply_fan_fault }
+          - { bit: 4, property: error_extract_fan_fault }
+          - { bit: 5, property: error_sensor_bus_fault }
+          - { bit: 6, property: error_preheater_fault }
+          - { bit: 7, property: error_bypass_fault }
+
+      - address: 2
+        title: "Device Status - Warnings"
+        description: >-
+          Conditions that degrade operation or need attention but do not stop
+          ventilation.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: warning_supply_voltage_warning }
+          - { bit: 1, property: warning_internal_voltage_warning }
+          - { bit: 2, property: warning_sensor_replacement_due }
+          - { bit: 3, property: warning_client_interface_degraded }
+          - { bit: 4, property: warning_filter_replacement_due }
+          - { bit: 5, property: warning_efficiency_below_expected }
+
+      - address: 3
+        fields: [ { property: supply_voltage, encoding: uint16 } ]
+
+      - address: 11
+        fields: [ { property: client_state, encoding: uint16 } ]
+
+      - address: 12
+        fields: [ { property: application_state, encoding: uint16 } ]
+
+      - address: 13
+        fields: [ { property: sensor_bus_state, encoding: uint16 } ]
+
+      - address: 21
+        fields: [ { property: outdoor_air_temperature, encoding: int16 } ]
+
+      - address: 22
+        fields: [ { property: supply_air_temperature, encoding: int16 } ]
+
+      - address: 23
+        fields: [ { property: extract_air_temperature, encoding: int16 } ]
+
+      - address: 24
+        fields: [ { property: exhaust_air_temperature, encoding: int16 } ]
+
+      - address: 25
+        fields: [ { property: heat_recovery_efficiency, encoding: uint16 } ]
+
+      - address: 31
+        fields: [ { property: preheater_output_value, encoding: uint16 } ]
+
+      - address: 32
+        title: "Pre-heater State"
+        description: >-
+          Pre-heater diagnostics. Meaningful only on units where the pre-heater
+          option is fitted.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: preheater_fault }
+          - { bit: 1, property: preheater_thermal_cutout_open }
+          - { bit: 2, property: preheater_output_saturated }
+          - { bit: 3, property: preheater_frost_protection_active }
+
+      - address: 41
+        fields: [ { property: bypass_position, encoding: uint16 } ]
+
+      - address: 42
+        title: "Bypass State"
+        description: >-
+          Bypass damper diagnostics, including the two conditions under which the
+          unit holds the damper closed regardless of the control mode.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: bypass_damper_fault }
+          - { bit: 1, property: bypass_position_feedback_missing }
+          - { bit: 2, property: bypass_held_closed_by_frost_protection }
+          - { bit: 3, property: bypass_held_closed_by_missing_temperature }
+
+      - address: 51
+        fields: [ { property: filter_elapsed_time, encoding: uint16 } ]
+
+      - address: 52
+        fields: [ { property: filter_differential_pressure, encoding: uint16 } ]
+
+      - address: 53
+        title: "Filter State"
+        description: >-
+          Filter condition as judged by the selected monitoring mode.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: filter_replacement_due }
+          - { bit: 1, property: filter_replacement_overdue }
+          - { bit: 2, property: filter_pressure_sensor_fault }
+
+      - address: 101
+        fields: [ { property: supply_fan_output_value, encoding: uint16 } ]
+
+      - address: 102
+        fields: [ { property: supply_fan_speed, encoding: uint16 } ]
+
+      - address: 103
+        title: "Supply Fan State"
+        description: >-
+          Fault and diagnostic bits for the supply fan channel, whichever control
+          source is selected.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: supply_fan_fault }
+          - { bit: 1, property: supply_fan_tacho_missing }
+          - { bit: 2, property: supply_fan_modbus_timeout }
+          - { bit: 3, property: supply_fan_blocked_rotor }
+
+      - address: 104
+        fields: [ { property: supply_digital_input_state, encoding: uint16 } ]
+
+      - address: 131
+        fields: [ { property: extract_fan_output_value, encoding: uint16 } ]
+
+      - address: 132
+        fields: [ { property: extract_fan_speed, encoding: uint16 } ]
+
+      - address: 133
+        title: "Extract Fan State"
+        description: >-
+          Fault and diagnostic bits for the extract fan channel, whichever control
+          source is selected.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: extract_fan_fault }
+          - { bit: 1, property: extract_fan_tacho_missing }
+          - { bit: 2, property: extract_fan_modbus_timeout }
+          - { bit: 3, property: extract_fan_blocked_rotor }
+
+      - address: 134
+        fields: [ { property: extract_digital_input_state, encoding: uint16 } ]
+
+      - address: 201
+        title: "Supply Channel 1 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on supply channel 1 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: supply_ch1_provides_temperature }
+          - { bit: 1, property: supply_ch1_provides_relative_humidity }
+          - { bit: 2, property: supply_ch1_provides_voc }
+          - { bit: 3, property: supply_ch1_provides_carbon_dioxide }
+          - { bit: 4, property: supply_ch1_provides_barometric_pressure }
+
+      - address: 202
+        title: "Supply Channel 1 - Sensor State"
+        description: >-
+          Condition of the sensor module on supply channel 1. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: supply_ch1_sensor_problem }
+          - { bit: 1, property: supply_ch1_sensor_replacement }
+          - { bit: 2, property: supply_ch1_sensor_preheating }
+          - { bit: 3, property: supply_ch1_sensor_not_connected }
+
+      - address: 203
+        fields: [ { property: supply_ch1_alerts, encoding: uint16 } ]
+
+      - address: 204
+        fields: [ { property: supply_ch1_temperature_level, encoding: int16 } ]
+
+      - address: 205
+        fields: [ { property: supply_ch1_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 206
+        fields: [ { property: supply_ch1_voc_level, encoding: uint16 } ]
+
+      - address: 207
+        fields: [ { property: supply_ch1_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 208
+        fields: [ { property: supply_ch1_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 221
+        title: "Supply Channel 2 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on supply channel 2 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: supply_ch2_provides_temperature }
+          - { bit: 1, property: supply_ch2_provides_relative_humidity }
+          - { bit: 2, property: supply_ch2_provides_voc }
+          - { bit: 3, property: supply_ch2_provides_carbon_dioxide }
+          - { bit: 4, property: supply_ch2_provides_barometric_pressure }
+
+      - address: 222
+        title: "Supply Channel 2 - Sensor State"
+        description: >-
+          Condition of the sensor module on supply channel 2. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: supply_ch2_sensor_problem }
+          - { bit: 1, property: supply_ch2_sensor_replacement }
+          - { bit: 2, property: supply_ch2_sensor_preheating }
+          - { bit: 3, property: supply_ch2_sensor_not_connected }
+
+      - address: 223
+        fields: [ { property: supply_ch2_alerts, encoding: uint16 } ]
+
+      - address: 224
+        fields: [ { property: supply_ch2_temperature_level, encoding: int16 } ]
+
+      - address: 225
+        fields: [ { property: supply_ch2_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 226
+        fields: [ { property: supply_ch2_voc_level, encoding: uint16 } ]
+
+      - address: 227
+        fields: [ { property: supply_ch2_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 228
+        fields: [ { property: supply_ch2_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 241
+        title: "Supply Channel 3 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on supply channel 3 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: supply_ch3_provides_temperature }
+          - { bit: 1, property: supply_ch3_provides_relative_humidity }
+          - { bit: 2, property: supply_ch3_provides_voc }
+          - { bit: 3, property: supply_ch3_provides_carbon_dioxide }
+          - { bit: 4, property: supply_ch3_provides_barometric_pressure }
+
+      - address: 242
+        title: "Supply Channel 3 - Sensor State"
+        description: >-
+          Condition of the sensor module on supply channel 3. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: supply_ch3_sensor_problem }
+          - { bit: 1, property: supply_ch3_sensor_replacement }
+          - { bit: 2, property: supply_ch3_sensor_preheating }
+          - { bit: 3, property: supply_ch3_sensor_not_connected }
+
+      - address: 243
+        fields: [ { property: supply_ch3_alerts, encoding: uint16 } ]
+
+      - address: 244
+        fields: [ { property: supply_ch3_temperature_level, encoding: int16 } ]
+
+      - address: 245
+        fields: [ { property: supply_ch3_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 246
+        fields: [ { property: supply_ch3_voc_level, encoding: uint16 } ]
+
+      - address: 247
+        fields: [ { property: supply_ch3_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 248
+        fields: [ { property: supply_ch3_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 261
+        title: "Extract Channel 1 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on extract channel 1 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: extract_ch1_provides_temperature }
+          - { bit: 1, property: extract_ch1_provides_relative_humidity }
+          - { bit: 2, property: extract_ch1_provides_voc }
+          - { bit: 3, property: extract_ch1_provides_carbon_dioxide }
+          - { bit: 4, property: extract_ch1_provides_barometric_pressure }
+
+      - address: 262
+        title: "Extract Channel 1 - Sensor State"
+        description: >-
+          Condition of the sensor module on extract channel 1. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: extract_ch1_sensor_problem }
+          - { bit: 1, property: extract_ch1_sensor_replacement }
+          - { bit: 2, property: extract_ch1_sensor_preheating }
+          - { bit: 3, property: extract_ch1_sensor_not_connected }
+
+      - address: 263
+        fields: [ { property: extract_ch1_alerts, encoding: uint16 } ]
+
+      - address: 264
+        fields: [ { property: extract_ch1_temperature_level, encoding: int16 } ]
+
+      - address: 265
+        fields: [ { property: extract_ch1_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 266
+        fields: [ { property: extract_ch1_voc_level, encoding: uint16 } ]
+
+      - address: 267
+        fields: [ { property: extract_ch1_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 268
+        fields: [ { property: extract_ch1_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 281
+        title: "Extract Channel 2 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on extract channel 2 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: extract_ch2_provides_temperature }
+          - { bit: 1, property: extract_ch2_provides_relative_humidity }
+          - { bit: 2, property: extract_ch2_provides_voc }
+          - { bit: 3, property: extract_ch2_provides_carbon_dioxide }
+          - { bit: 4, property: extract_ch2_provides_barometric_pressure }
+
+      - address: 282
+        title: "Extract Channel 2 - Sensor State"
+        description: >-
+          Condition of the sensor module on extract channel 2. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: extract_ch2_sensor_problem }
+          - { bit: 1, property: extract_ch2_sensor_replacement }
+          - { bit: 2, property: extract_ch2_sensor_preheating }
+          - { bit: 3, property: extract_ch2_sensor_not_connected }
+
+      - address: 283
+        fields: [ { property: extract_ch2_alerts, encoding: uint16 } ]
+
+      - address: 284
+        fields: [ { property: extract_ch2_temperature_level, encoding: int16 } ]
+
+      - address: 285
+        fields: [ { property: extract_ch2_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 286
+        fields: [ { property: extract_ch2_voc_level, encoding: uint16 } ]
+
+      - address: 287
+        fields: [ { property: extract_ch2_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 288
+        fields: [ { property: extract_ch2_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 301
+        title: "Extract Channel 3 - Sensor Capability"
+        description: >-
+          Which measurands the sensor module on extract channel 3 reports.
+          Discovered at startup and after a bus rescan; a channel may report
+          several at once.
+        clear_label: "No measurands reported"
+        fields:
+          - { bit: 0, property: extract_ch3_provides_temperature }
+          - { bit: 1, property: extract_ch3_provides_relative_humidity }
+          - { bit: 2, property: extract_ch3_provides_voc }
+          - { bit: 3, property: extract_ch3_provides_carbon_dioxide }
+          - { bit: 4, property: extract_ch3_provides_barometric_pressure }
+
+      - address: 302
+        title: "Extract Channel 3 - Sensor State"
+        description: >-
+          Condition of the sensor module on extract channel 3. Its readings are
+          only trustworthy while none of these bits is set.
+        clear_label: "OK"
+        fields:
+          - { bit: 0, property: extract_ch3_sensor_problem }
+          - { bit: 1, property: extract_ch3_sensor_replacement }
+          - { bit: 2, property: extract_ch3_sensor_preheating }
+          - { bit: 3, property: extract_ch3_sensor_not_connected }
+
+      - address: 303
+        fields: [ { property: extract_ch3_alerts, encoding: uint16 } ]
+
+      - address: 304
+        fields: [ { property: extract_ch3_temperature_level, encoding: int16 } ]
+
+      - address: 305
+        fields: [ { property: extract_ch3_relative_humidity_level, encoding: uint16 } ]
+
+      - address: 306
+        fields: [ { property: extract_ch3_voc_level, encoding: uint16 } ]
+
+      - address: 307
+        fields: [ { property: extract_ch3_carbon_dioxide_level, encoding: uint16 } ]
+
+      - address: 308
+        fields: [ { property: extract_ch3_barometric_pressure_level, encoding: uint16 } ]
+
+      - address: 501
+        fields: [ { property: mcu_temperature, encoding: int16 } ]
+
+      - address: 504
+        fields: [ { property: lifetime_days, encoding: uint16 } ]
+
+      - address: 505
+        fields: [ { property: lifetime_minutes, encoding: uint16 } ]
+
+      - address: 506
+        fields: [ { property: internal_voltage_12v, encoding: uint16 } ]
+
+      - address: 507
+        fields: [ { property: internal_voltage_3v3, encoding: uint16 } ]

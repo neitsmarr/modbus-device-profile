@@ -324,38 +324,58 @@ def check_reread_dependents(doc, index, rep: Report) -> None:
 # ------------------------------------------------------------------ layer 3
 def base_of(modbus_doc, space: str):
     """The address this document would write for wire offset 0 in `space`."""
-    return (modbus_doc.get("addressing") or {}).get(space)
+    return ((modbus_doc.get("spaces") or {}).get(space) or {}).get("base")
 
 
 def wire_offset(modbus_doc, space: str, address: int):
-    """What actually travels in the request. None if the space declares no base."""
+    """What actually travels in the request. None if the space is not described."""
     base = base_of(modbus_doc, space)
     return None if base is None else address - base
+
+
+def iter_registers(modbus_doc):
+    """Every register, with its space and a path that names where it came from.
+
+    Spaces are containers (D20), so a register no longer carries its own space
+    and every walk needs this. Yields (space, register, path).
+    """
+    for space, block in (modbus_doc.get("spaces") or {}).items():
+        for i, reg in enumerate((block or {}).get("registers") or []):
+            yield space, reg, f"spaces/{space}/registers/{i}"
+
+
+def fields_of(reg):
+    """A register's fields, uniformly.
+
+    A coil or discrete input names its one property directly -- a list of one
+    exists only to be indexed -- so this synthesises the field every other check
+    expects rather than making each of them special-case a bit space.
+    """
+    if "fields" in reg:
+        return reg["fields"]
+    if "property" in reg:
+        return [{"property": reg["property"], "encoding": "bit"}]
+    return []
 
 
 def check_addressing(modbus_doc, rep: Report) -> None:
     """A1: what the declared bases imply, which a schema cannot see.
 
-    A space used by the map has to declare a base, and every address has to fall
-    in the one window that base allows -- both need a sibling section, so both
-    live here. A2's coil and discrete rules are in the schema instead, being
-    local to one register.
+    Every address has to fall in the one window its space's base allows, which
+    needs the space it sits in -- so it lives here. That a space used by the map
+    declares a base is no longer checked at all: since D20 a register cannot be
+    written outside a space block, and a block cannot omit its base.
     """
-    addressing = modbus_doc.get("addressing") or {}
-    used = {reg.get("space") for reg in modbus_doc.get("registers") or []}
-    used |= {p.get("space") for p in
-             ((modbus_doc.get("identification") or {}).get("registers") or [])}
+    described = modbus_doc.get("spaces") or {}
+    probed = {p.get("space") for p in
+              ((modbus_doc.get("identification") or {}).get("registers") or [])}
+    for space in sorted(s for s in probed if s):
+        if space not in described:
+            rep.error(f"identification: a probe reads the {space} space, which this document does "
+                      f"not describe, so its numbering is unknown")
 
-    for space in sorted(s for s in used if s):
-        if space not in addressing:
-            rep.error(f"addressing: the map uses the {space} space but does not say which address "
-                      f"there means wire offset 0, so every {space} address is ambiguous")
-    for space in sorted(addressing):
-        if space not in used:
-            rep.warn(f"addressing/{space}: declared but no {space} address appears anywhere")
-
-    for i, reg in enumerate(modbus_doc.get("registers") or []):
-        base = base_of(modbus_doc, reg.get("space"))
+    for space, reg, i in iter_registers(modbus_doc):
+        base = base_of(modbus_doc, space)
         if base is None:
             continue
         lo, hi = base, base + 0xFFFF
@@ -364,11 +384,10 @@ def check_addressing(modbus_doc, rep: Report) -> None:
                 continue
             addr = reg[key]
             if not lo <= addr <= hi:
-                rep.error(f"registers/{i}/{key}: {addr} is outside {lo}..{hi} -- with a base of "
-                          f"{base} it would be wire offset {addr - base}, and only 0..65535 exists")
+                rep.error(f"{i}/{key}: {addr} is outside {lo}..{hi} -- with a base of {base} it "
+                          f"would be wire offset {addr - base}, and only 0..65535 exists")
         if "from" in reg and "to" in reg and reg["to"] < reg["from"]:
-            rep.error(f"registers/{i}: reserved range ends ({reg['to']}) before it starts "
-                      f"({reg['from']})")
+            rep.error(f"{i}: reserved range ends ({reg['to']}) before it starts ({reg['from']})")
 
 
 def check_identification(modbus_doc, rep: Report) -> None:
@@ -384,10 +403,10 @@ def check_identification(modbus_doc, rep: Report) -> None:
                  "here says how a client should recognise this device")
         return
 
-    occupied: dict[tuple[str, int], int] = {}
-    for i, reg in enumerate(modbus_doc.get("registers") or []):
+    occupied: dict[tuple[str, int], str] = {}
+    for space, reg, at in iter_registers(modbus_doc):
         if "address" in reg:
-            occupied[(reg["space"], reg["address"])] = i
+            occupied[(space, reg["address"])] = at
 
     seen: set[tuple[str, int]] = set()
     for i, probe in enumerate(ident.get("registers") or []):
@@ -494,11 +513,10 @@ def check_documentation(modbus_doc, rep: Report) -> None:
     register's are the same name.
     """
     missing_title, missing_desc, missing_field_title = [], [], []
-    for i, reg in enumerate(modbus_doc.get("registers") or []):
+    for _space, reg, at in iter_registers(modbus_doc):
         if "reserved" in reg:
             continue
-        fields = reg.get("fields") or []
-        at = f"registers/{i}"
+        fields = fields_of(reg)
         if "title" not in reg:
             missing_title.append(at)
         if "description" not in reg:
@@ -521,7 +539,6 @@ def check_documentation(modbus_doc, rep: Report) -> None:
 def check_agreement(props_doc, modbus_doc, rep: Report):
     """The two documents have to agree. Returns (encoding per property, on-bus set)."""
     props = props_doc.get("properties") or {}
-    registers = modbus_doc.get("registers") or []
 
     encodings: dict[str, str] = {}
     owner: dict[str, str] = {}        # property -> where it is carried
@@ -536,10 +553,7 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
             rep.error(f"{at}: {space} {addr} is already used by {prior}")
         (whole if kind == "whole" else packed)[key] = what
 
-    for ri, reg in enumerate(registers):
-        space = reg.get("space")
-        at = f"registers/{ri}"
-
+    for space, reg, at in iter_registers(modbus_doc):
         if reg.get("reserved"):
             lo, hi = reg.get("from"), reg.get("to")
             if lo is not None and hi is not None:
@@ -550,7 +564,7 @@ def check_agreement(props_doc, modbus_doc, rep: Report):
             continue
 
         addr = reg.get("address")
-        fields = reg.get("fields") or []
+        fields = fields_of(reg)
         if any("bit" in f for f in fields):
             claim(space, addr, f"packed bits ({at})", at, "packed")
 

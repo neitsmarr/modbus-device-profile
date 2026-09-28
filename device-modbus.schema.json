@@ -2,13 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/modbus-device-profile/device-modbus.schema.json",
   "title": "Modbus register map",
-  "description": "The Modbus interface of one device: which device it is, how its addresses are numbered, how a client recognises it on the bus, what the transport tolerates, and the register map itself. A register is an entity here rather than an attribute of a property, which is what lets one register carry several properties as bits, one property span several registers, and a range be reserved carrying nothing at all -- none of which a per-property binding could express (D15). Intended to describe any Modbus device, third-party as well as our own: everything a client needs in order to talk to it is here, and properties are referenced by name from a semantic document that a third-party device may not have.",
+  "description": "The Modbus interface of one device: which device it is, how a client recognises it, which exceptions it raises, what the transport tolerates, and the address spaces it exposes. A space owns the numbering its registers are written in and the registers themselves; a register owns its address, prose and access, and its fields say which properties it carries. Intended to describe any Modbus device, third-party as well as our own: everything a client needs in order to talk to it is here, and properties are referenced by name from a semantic document that a third-party device may not have.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "device",
-    "addressing",
-    "registers"
+    "spaces"
   ],
   "properties": {
     "device": {
@@ -56,38 +55,6 @@
               "pattern": "^(?:0|[1-9]\\d{0,2})\\.(?:0|[1-9]\\d{0,2})(?:\\.(?:0|[1-9]\\d{0,2}))?$"
             }
           }
-        }
-      }
-    },
-    "addressing": {
-      "type": "object",
-      "additionalProperties": false,
-      "minProperties": 1,
-      "description": "For each address space this map uses, the address that corresponds to wire offset 0. Every `address` in this document is then read as: offset = address - addressing[space]. Required, and the single most consequential fact in the file -- an off-by-one here is wrong in the documentation, the commissioning tool and the firmware simultaneously, with no diff anywhere to show it. Modbus numbers the wire offset from 0 while nearly every datasheet prints register numbers from 1, so neither can be assumed. Give 1 for datasheet numbering, 0 to write raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. A space that appears in `registers` has to appear here; validate.py checks that, since a schema cannot see a sibling section. Keys are the `space` values themselves so a consumer can look one up as addressing[register.space] with no table in between -- and because a coil is not a register, so spelling these '..._registers' would be wrong for half of them.",
-      "properties": {
-        "holding": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999999,
-          "description": "The holding address this file would write for wire offset 0."
-        },
-        "input": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999999,
-          "description": "The input address this file would write for wire offset 0."
-        },
-        "coil": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999999,
-          "description": "The coil address this file would write for wire offset 0."
-        },
-        "discrete": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 999999,
-          "description": "The discrete address this file would write for wire offset 0."
         }
       }
     },
@@ -318,11 +285,108 @@
         }
       }
     },
-    "registers": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "$ref": "#/$defs/register"
+    "spaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "The address spaces this device exposes, each owning its numbering and its registers. Spaces are independent ranges -- the same number in two spaces is two different registers -- so they are containers here rather than a tag repeated on every entry. A space the device does not expose is simply absent, which is what says so.",
+      "properties": {
+        "holding": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The holding register space: 16-bit read-write registers, reached by FC 3, 6 and 16.",
+          "required": [
+            "base",
+            "registers"
+          ],
+          "properties": {
+            "base": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999,
+              "description": "The address this document would write for wire offset 0 in this space, so offset = address - base. 1 for the register numbers a datasheet prints, 0 for raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. Required: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff anywhere to show it, and nothing about it is derivable. It lives on the space because it is a fact about that space's numbering and about nothing else."
+            },
+            "registers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/word_register"
+              }
+            }
+          }
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The input register space: 16-bit read-only registers, reached by FC 4.",
+          "required": [
+            "base",
+            "registers"
+          ],
+          "properties": {
+            "base": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999,
+              "description": "The address this document would write for wire offset 0 in this space, so offset = address - base. 1 for the register numbers a datasheet prints, 0 for raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. Required: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff anywhere to show it, and nothing about it is derivable. It lives on the space because it is a fact about that space's numbering and about nothing else."
+            },
+            "registers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/word_register"
+              }
+            }
+          }
+        },
+        "coil": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The coil space: single read-write bits, reached by FC 1, 5 and 15.",
+          "required": [
+            "base",
+            "registers"
+          ],
+          "properties": {
+            "base": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999,
+              "description": "The address this document would write for wire offset 0 in this space, so offset = address - base. 1 for the register numbers a datasheet prints, 0 for raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. Required: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff anywhere to show it, and nothing about it is derivable. It lives on the space because it is a fact about that space's numbering and about nothing else."
+            },
+            "registers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/bit_register"
+              }
+            }
+          }
+        },
+        "discrete": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The discrete input space: single read-only bits, reached by FC 2.",
+          "required": [
+            "base",
+            "registers"
+          ],
+          "properties": {
+            "base": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 999999,
+              "description": "The address this document would write for wire offset 0 in this space, so offset = address - base. 1 for the register numbers a datasheet prints, 0 for raw offsets, or the legacy Modicon base directly -- 40001 for holding, 30001 for input -- which lets a map be transcribed exactly as printed. Required: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff anywhere to show it, and nothing about it is derivable. It lives on the space because it is a fact about that space's numbering and about nothing else."
+            },
+            "registers": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/bit_register"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -374,15 +438,89 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 1065535,
-      "description": "An address in the numbering its space declares in `addressing`. The wire offset is address - addressing[space], and the legal window is therefore addressing[space] .. addressing[space] + 65535, which validate.py enforces -- a schema cannot see a sibling section. The bound here is merely generous enough for six-digit Modicon numbering."
+      "description": "An address in the numbering its space declares. The wire offset is address - base, and the legal window is therefore base .. base + 65535, which validate.py enforces -- a schema cannot see a sibling key. The bound here is merely generous enough for six-digit Modicon numbering."
     },
-    "register": {
+    "field": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "space"
+        "property"
       ],
-      "description": "One register, or a reserved range of them.",
+      "description": "One property carried by this register, either whole or as a single bit.",
+      "oneOf": [
+        {
+          "required": [
+            "encoding"
+          ],
+          "not": {
+            "required": [
+              "bit"
+            ]
+          }
+        },
+        {
+          "required": [
+            "bit"
+          ],
+          "not": {
+            "required": [
+              "encoding"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "property": {
+          "$ref": "#/$defs/identifier",
+          "description": "Name of the property in the properties document."
+        },
+        "encoding": {
+          "enum": [
+            "uint16",
+            "int16",
+            "uint32",
+            "int32",
+            "uint64",
+            "int64",
+            "float32",
+            "float64",
+            "chars"
+          ],
+          "description": "How the value is packed, in a 16-bit space. Required, and deliberately not derived from the property's range even though the narrowest fitting width is correct in 178 of 190 cases here: deriving it would let a range widened in the semantic document silently change the wire format, which is a protocol break with no diff in this file (D16). A width wider than one register makes this register span the following addresses too."
+        },
+        "bit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "Bit position, for a bool packed into this register. No encoding is given: a bit is a bit."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Element count for an array or a string. Array length, not register span."
+        },
+        "word_order": {
+          "enum": [
+            "big",
+            "little"
+          ],
+          "description": "Overrides limits.word_order for this field."
+        }
+      }
+    },
+    "space": {
+      "enum": [
+        "holding",
+        "input",
+        "coil",
+        "discrete"
+      ],
+      "description": "Which Modbus address space. These are independent ranges: the same number in two spaces is two different registers."
+    },
+    "word_register": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One register in a 16-bit space, or a reserved range of them. Its space is the block it sits in, which also fixes its numbering. A bool packed into it is a field with a `bit` position; `bit` is not an encoding here, because it would not say which bit -- that shape belongs to the single-bit spaces, and is unrepresentable in this one.",
       "oneOf": [
         {
           "required": [
@@ -469,75 +607,6 @@
           }
         },
         {
-          "description": "A coil or a discrete input IS one bit, and its address selects it. So such a register carries exactly one field, that field's encoding is 'bit', and there is no bit position to give -- the address already was one. A clear_label means nothing either: there is no set of bits to be collectively clear.",
-          "if": {
-            "required": [
-              "space"
-            ],
-            "properties": {
-              "space": {
-                "enum": [
-                  "coil",
-                  "discrete"
-                ]
-              }
-            }
-          },
-          "then": {
-            "not": {
-              "required": [
-                "clear_label"
-              ]
-            },
-            "properties": {
-              "fields": {
-                "maxItems": 1,
-                "items": {
-                  "required": [
-                    "encoding"
-                  ],
-                  "properties": {
-                    "encoding": {
-                      "const": "bit"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "description": "Conversely, 'bit' is not an encoding a 16-bit register can have: which bit would it be? A bool packed into a holding or input register is a field with a 'bit' position instead.",
-          "if": {
-            "required": [
-              "space"
-            ],
-            "properties": {
-              "space": {
-                "enum": [
-                  "holding",
-                  "input"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "fields": {
-                "items": {
-                  "properties": {
-                    "encoding": {
-                      "not": {
-                        "const": "bit"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
           "description": "A count is an element count, so it belongs to an encoding that has elements. Only 'chars' does.",
           "if": {
             "required": [
@@ -579,9 +648,6 @@
         }
       ],
       "properties": {
-        "space": {
-          "$ref": "#/$defs/space"
-        },
         "address": {
           "$ref": "#/$defs/address"
         },
@@ -627,83 +693,91 @@
         }
       }
     },
-    "field": {
+    "bit_register": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "property"
-      ],
-      "description": "One property carried by this register, either whole or as a single bit.",
+      "description": "One coil or discrete input, or a reserved range of them. A coil IS one bit and its address selects it, so there is exactly one property, no encoding to choose, no bit position to give -- the address already was one -- and no clear_label, since there is no set of bits to be collectively clear. None of that is a rule checked here: it is the shape.",
       "oneOf": [
         {
           "required": [
-            "encoding"
+            "address",
+            "property"
           ],
           "not": {
-            "required": [
-              "bit"
+            "anyOf": [
+              {
+                "required": [
+                  "from"
+                ]
+              },
+              {
+                "required": [
+                  "reserved"
+                ]
+              }
             ]
           }
         },
         {
           "required": [
-            "bit"
+            "from",
+            "to",
+            "reserved"
           ],
           "not": {
-            "required": [
-              "encoding"
+            "anyOf": [
+              {
+                "required": [
+                  "address"
+                ]
+              },
+              {
+                "required": [
+                  "property"
+                ]
+              }
             ]
           }
         }
       ],
       "properties": {
+        "address": {
+          "$ref": "#/$defs/address"
+        },
+        "from": {
+          "$ref": "#/$defs/address"
+        },
+        "to": {
+          "$ref": "#/$defs/address"
+        },
         "property": {
           "$ref": "#/$defs/identifier",
-          "description": "Name of the property in the properties document."
+          "description": "The single bool this coil carries. Named directly rather than through a `fields` list: a list of one is a list that exists only to be indexed."
         },
-        "encoding": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The coil's name in the register map."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prose for the register map (D18)."
+        },
+        "access": {
           "enum": [
-            "bit",
-            "uint16",
-            "int16",
-            "uint32",
-            "int32",
-            "uint64",
-            "int64",
-            "float32",
-            "float64",
-            "chars"
+            "read_only",
+            "write_only",
+            "read_write"
           ],
-          "description": "How the value is packed. Required, and deliberately not derived from the property's range even though the narrowest fitting width is correct in 178 of 190 cases here: deriving it would let a range widened in the semantic document silently change the wire format, which is a protocol break with no diff in this file (D16). A width wider than one register makes this register span the following addresses too."
+          "description": "A discrete input is inherently read-only; a coil is normally read-write. State it only where this device offers less."
         },
-        "bit": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 15,
-          "description": "Bit position, for a bool packed into this register. No encoding is given: a bit is a bit."
-        },
-        "count": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Element count for an array or a string. Array length, not register span."
-        },
-        "word_order": {
-          "enum": [
-            "big",
-            "little"
-          ],
-          "description": "Overrides limits.word_order for this field."
+        "reserved": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this range carries nothing. The prose is the point -- a bare gap is indistinguishable from an oversight."
         }
       }
-    },
-    "space": {
-      "enum": [
-        "holding",
-        "input",
-        "coil",
-        "discrete"
-      ],
-      "description": "Which Modbus address space. These are independent ranges: the same number in two spaces is two different registers."
     }
   }
 }

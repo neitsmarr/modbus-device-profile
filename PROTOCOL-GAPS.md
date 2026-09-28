@@ -14,7 +14,12 @@ self-describing: device identity, a per-space addressing base, single-bit coil a
 discrete spaces, and `identification:` for recognising the device on a bus. D19
 added `exceptions:` and closed B5. Between them `limits` gained two readers, so
 A3's "decorative" charge no longer holds even though its remaining keys are still
-consumed by nothing. A6, A7, B1–B4, B6 and B7 are still open.
+consumed by nothing. D20 then made address spaces first-class, which turned A2's
+rules into the shape of the document rather than checks against it.
+
+Everything still open is indexed in `OPEN-QUESTIONS.md`, including one question
+this audit did not raise at all: how a value wider than one register is described.
+A6, A7, B1–B4, B6 and B7 are still open.
 
 This audit also **missed one**, recorded as D18: no register carried a title or
 a description except the 19 the schema forced, because the audit asked what a
@@ -72,7 +77,8 @@ change away from being wrong everywhere at once, with no diff to show it.
 
 ### A2. A coil is a single bit, and the schema does not know that
 
-**CLOSED by D17.**
+**CLOSED by D17, then made structural by D20** — a bit space and a word space hold
+different kinds of entry, so this is no longer rejected but unrepresentable.
 
 Probes, all **accepted** by schema and validator together:
 

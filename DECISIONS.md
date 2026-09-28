@@ -1010,15 +1010,17 @@ documents.
 
 ### Rule 2 — each address space declares what its numbering counts from
 
-    addressing:
-      holding: 1
-      input: 1
+    spaces:
+      holding:
+        base: 1
+        registers: [ ... ]
 
-Each entry is the address this document would write for **wire offset 0** in that
-space, so every address in the file is read as
-`offset = address - addressing[space]`. Write 1 for datasheet numbering, 0 to
-write raw offsets, or the legacy Modicon base directly — `holding: 40001`,
-`input: 30001` — which lets a map be transcribed exactly as printed.
+`base` is the address this document would write for **wire offset 0** in that
+space, so every address in the file is read as `offset = address - base`. Write 1
+for datasheet numbering, 0 to write raw offsets, or the legacy Modicon base
+directly — `40001` for holding, `30001` for input — which lets a map be
+transcribed exactly as printed. It sits on the space because it is a fact about
+that space's numbering and about nothing else (D20).
 
 **Why this is required rather than defaulted.** The file said `address: 1`, the
 schema permitted `address: 0`, and `generate_library_json.py` copied the address
@@ -1030,12 +1032,6 @@ it, and it is what a transcribed third-party map is most likely to get wrong.
 Nothing about it is derivable. A default would be the unstated convention again,
 spelled differently.
 
-**Keys are the `space` values themselves**, not `holding_registers` /
-`input_registers`: a consumer resolves `addressing[register.space]` with no
-mapping table in between, those four words are already the format's vocabulary in
-`space:`, and a coil is not a register, so the longer spelling would be wrong for
-half the spaces.
-
 **Rejected: a named convention.** `base: pdu | data_model`, with a
 `base_overrides` map for a device numbering one space differently, was the first
 form. Two mechanisms and a private vocabulary to express one integer, and the
@@ -1044,19 +1040,28 @@ strictly more capable: the enum could say 0 or 1 and nothing else, so legacy
 numbering was expressible only by instructing the author to strip the prefix —
 after which the map silently differed from the datasheet it was copied from.
 
+**Also rejected: naming the spaces `holding_registers` / `input_registers`.** A
+consumer resolves the space by the same word `space:` already uses, with no
+mapping table in between — and a coil is not a register, so the longer spelling
+would be wrong for half the spaces.
+
 **It also fixed a live bug.** The generator emitted `"number": reg["address"]`,
 which is correct only when the base happens to be 1. It now computes
 `address - base + 1`. The output is unchanged for this device, which is precisely
 why the bug went unnoticed: one profile with base 1 cannot distinguish the two.
 
-### Rule 3 — a coil is a single bit, and the schema knows it
+### Rule 3 — a coil is a single bit
 
-A `coil` or `discrete` register carries exactly one field, that field's encoding
-is `bit`, and there is no `bit:` position to give — the address already was one.
-`clear_label` is meaningless there too: there is no set of bits to be
-collectively clear. Conversely `encoding: bit` is rejected in `holding` and
-`input`, where it never said which bit. `count` is confined to `chars`, being an
-element count on an encoding that has no elements otherwise.
+A coil or discrete input carries exactly one property, has no encoding to choose,
+no `bit:` position to give — the address already was one — and no `clear_label`,
+since there is no set of bits to be collectively clear. Conversely `bit` is not an
+encoding a 16-bit register can have, because it would not say which bit. `count`
+is confined to `chars`, being an element count on an encoding that has no
+elements otherwise.
+
+Since D20 these are not rules the schema checks but the shape it describes: a bit
+space and a word space hold different kinds of entry, so the nonsense below is
+unrepresentable rather than rejected.
 
 **Why it needed rules at all.** All three of these were accepted by the schema
 *and* by the validator: a coil carrying `uint16`, a coil field with `bit: 3`, a
@@ -1334,3 +1339,93 @@ placeholders. All of it is marked in the document's ASSUMPTIONS block.
 A register-level exception list would be more precise and much more verbose, and
 nothing has needed it; the two proprietary codes name their circumstances in
 prose instead.
+
+## D20 — An address space is an entity; it owns its numbering and its registers
+
+**Rule.** `registers:` as one flat list tagged with `space:` is replaced by
+`spaces:`, a container per address space:
+
+    spaces:
+      holding:
+        base: 1
+        registers:
+          - address: 1
+            fields: [ { property: server_slave_address, encoding: uint16 } ]
+      input:
+        base: 1
+        registers:
+          - ...
+
+A register no longer carries its own space; the block it sits in is its space,
+and that block also fixes the numbering its addresses are written in.
+
+**Why, and this took two wrong answers first.** The case for grouping was
+initially argued on three grounds and two of them were wrong:
+
+- *the addressing base belongs on the space* — correct, and the surviving
+  argument of the three
+- *`supported_fc` secretly encodes per-space capability, so grouping makes it
+  explicit* — wrong. Access is per **register**, not per space: a device's type,
+  hardware version and firmware version are read-only holding registers, and
+  products exist that use holding registers exclusively and mark each one's
+  access individually. Which function code reaches which space is definitional
+  and needs declaring nowhere.
+- *a space needs somewhere to hold its own limits* — not yet true of anything
+  measured, and the same speculative mistake as `base_overrides` before it
+
+What actually decides it is the third rule of D17. "A coil carries exactly one
+bit" was three `if/then` rules keyed on `space` **inside** the register object.
+Once the space is the container those conditionals cannot see it — so the rule had
+to move somewhere, and the honest place is the shape: a bit space holds
+`bit_register` entries, a word space holds `word_register` entries, and `bit`
+comes out of the word-space encoding enum entirely. Three conditionals became two
+types, and the nonsense they rejected is now unrepresentable. That is the same
+conversion D15 made with `bitfields:` and D19 made by requiring exception text
+unconditionally: a check becomes a structure.
+
+A second rule went the same way. "A space the map uses must declare a base" was a
+validator error; a register cannot now be written outside a space block, and a
+block cannot omit its base, so the check is deleted rather than kept.
+
+**A bit register names its property directly.**
+
+    coil:
+      base: 1
+      registers:
+        - address: 5
+          property: supply_fan_enable
+
+Not `fields: [ { property: supply_fan_enable } ]`. A list of one exists only to be
+indexed, and a coil can never hold two of anything. `validate.py` normalises it
+into the field shape every other check expects, so exactly one function knows
+about the difference.
+
+**The cost, stated plainly: register identity becomes positional.** Under the flat
+list, `- space: holding, address: 4, ...` was self-contained — it could be cut,
+pasted, quoted in a bug report or emailed and still mean holding register 4.
+Now `- address: 4` means nothing without its container, and this map holds both
+`holding 1` and `input 1`, which are different registers. Paste an entry into the
+wrong block and its identity changes silently.
+
+That cuts against D15, whose formulation began "a register is an entity: **it owns
+its space**, address, title, prose and access". Grouping takes that ownership
+away. It is worth being honest about how much weight this carries: nothing can
+*disagree* — the space is still stated exactly once, on the container — so this is
+robustness and ergonomics, not correctness. It is mitigated by making every
+validator path name the space, so a message reads
+`spaces/input/registers/57/fields/0` rather than `registers/130/fields/0`, which
+is strictly more useful than before.
+
+**What was deliberately not moved into a space.** `gaps_readable`,
+`max_read_words` and `max_write_words` are all arguably space-scoped, and all
+three stay in `limits`. Nothing measured shows a product varying them per space,
+and inventing the capability is exactly the mistake `base_overrides` and
+space-level `access` already were. The container now exists, so moving one later
+is a one-line change against evidence rather than a guess.
+
+**Cost.** 209 registers reindented and every walk in `validate.py` and
+`generate_library_json.py` rewritten to iterate spaces. Two helpers absorb the
+churn: `iter_registers`, which yields `(space, register, path)`, and `fields_of`,
+which hides the bit-register shape. The reindent found one latent bug on the way
+— `decoder_for` read `reg["space"]` on a code path only reachable when a packed
+register lacks a `clear_label`, which would now have been a `KeyError`.
