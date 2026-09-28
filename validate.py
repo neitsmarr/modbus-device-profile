@@ -7,7 +7,11 @@ Layer 1 is the JSON Schemas: shape and vocabulary of each document on its own.
 
 Layer 2 is what a schema cannot express because it needs a whole document at
 once -- reference resolution, enum coverage, storage widths, and D1's derived
-reverse index.
+reverse index. For the register map it is also everything that depends on a
+sibling section rather than one register: the address bounds implied by
+addressing.base, whether identification and the exception table agree with the
+function codes `limits` declares, and which registers still lack the prose D18
+requires.
 
 Layer 3 is what neither document can check alone: the two must agree. Every
 property that is not internal has to be carried by exactly one register field,
@@ -40,6 +44,25 @@ MODBUS_SCHEMA = HERE / "device-modbus.schema.json"
 EXPR_KEYWORDS = {"and", "or", "not", "in", "any", "all", "true", "false", "null"}
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 WHEN_KEYS = ("present_when", "valid_when", "writable_when", "effective_when", "when")
+
+# The exception codes Modbus defines, and what they mean if nobody says
+# otherwise. A profile listing one of these without prose is saying "this
+# device raises it, as specified"; anything outside this table is the vendor's
+# own and has to bring its own text. 7 and 9 are deliberately absent -- the
+# specification never assigned them, so a device using either is proprietary.
+STANDARD_EXCEPTIONS = {
+    0x01: "Illegal Function",
+    0x02: "Illegal Data Address",
+    0x03: "Illegal Data Value",
+    0x04: "Server Device Failure",
+    0x05: "Acknowledge",
+    0x06: "Server Device Busy",
+    0x08: "Memory Parity Error",
+    0x0A: "Gateway Path Unavailable",
+    0x0B: "Gateway Target Device Failed To Respond",
+}
+# Retrying an identical request can only help for these two.
+RETRYABLE_STANDARD = {0x05, 0x06}
 
 # Which encoding can carry which semantic type. The point of D10's split is that
 # this is a many-to-many table, not an identity.
@@ -394,6 +417,64 @@ def check_identification(modbus_doc, rep: Report) -> None:
                  "any register map, but no read_device_id objects are stated to match against")
 
 
+def check_exceptions(modbus_doc, rep: Report) -> None:
+    """D20: the exception table has to be decodable and consistent.
+
+    What a schema cannot check here is everything that needs the standard table
+    or a sibling section: whether a code is standard at all, whether the
+    function codes it names are ones the device answers, and whether a claim
+    made in `limits` agrees with the exceptions listed.
+    """
+    entries = modbus_doc.get("exceptions")
+    limits = modbus_doc.get("limits") or {}
+    supported = set(limits.get("supported_fc") or [])
+
+    if not entries:
+        rep.warn("exceptions: absent -- an integrator cannot tell a refused write from a broken "
+                 "bus, and a proprietary code can only be shown as a bare number (D20)")
+        return
+
+    seen: dict[int, int] = {}
+    for i, exc in enumerate(entries):
+        code = exc.get("code")
+        where = f"exceptions/{i}"
+        if code in seen:
+            rep.error(f"{where}: code {code:#04x} is already declared at exceptions/{seen[code]}; "
+                      f"one code cannot have two meanings")
+        seen[code] = i
+
+        standard = code in STANDARD_EXCEPTIONS
+        if exc.get("overloads") and not standard:
+            rep.error(f"{where}: code {code:#04x} is not a standard code, so there is no standard "
+                      f"meaning for it to overload -- drop 'overloads'")
+        if standard and not exc.get("overloads"):
+            # Prose that contradicts the standard meaning without saying so is
+            # the failure this warning exists for; it can only be guessed at,
+            # so flag the one case that is mechanically visible.
+            title = exc.get("title")
+            if title and title != STANDARD_EXCEPTIONS[code]:
+                rep.warn(f"{where}: code {code:#04x} is titled '{title}' rather than "
+                         f"'{STANDARD_EXCEPTIONS[code]}' but is not marked as overloading it -- "
+                         f"a client falling back on the standard table will disagree with this file")
+
+        for fc in exc.get("raised_by") or []:
+            if supported and fc not in supported:
+                rep.error(f"{where}/raised_by: function code {fc} is not in limits.supported_fc, "
+                          f"so it can never return this exception")
+
+        if standard and "retryable" in exc:
+            implied = code in RETRYABLE_STANDARD
+            if exc["retryable"] != implied:
+                rep.error(f"{where}: code {code:#04x} is declared retryable={exc['retryable']}, "
+                          f"contradicting the standard meaning of "
+                          f"'{STANDARD_EXCEPTIONS[code]}' -- mark it as overloading, or drop the key")
+
+    # `gaps_readable: false` is a claim about exception 2; the two have to agree.
+    if limits.get("gaps_readable") is False and 0x02 not in seen:
+        rep.warn("exceptions: limits.gaps_readable is false, which means reading an unoccupied "
+                 "address is refused, but code 0x02 is not among the exceptions listed")
+
+
 def check_documentation(modbus_doc, rep: Report) -> None:
     """D18: a register with no prose generates a documentation row with a blank.
 
@@ -575,6 +656,7 @@ def main(argv: list[str]) -> int:
     check_references(props_doc, rep)
     check_addressing(modbus_doc, rep)
     check_identification(modbus_doc, rep)
+    check_exceptions(modbus_doc, rep)
     check_documentation(modbus_doc, rep)
     encodings, _ = check_agreement(props_doc, modbus_doc, rep)
     check_storage(props_doc, encodings, rep)

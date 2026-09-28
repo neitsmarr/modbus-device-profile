@@ -1213,3 +1213,88 @@ with the numbered object list this block actually describes. The block is now
 `read_device_id` and describes only FC 43. 17 remains declarable in
 `supported_fc`, since a device may answer it, but nothing here matches on its
 contents: its payload is vendor-defined, so there is no portable way to.
+
+## D20 — Exception codes are part of the interface, and silence has to mean the standard meaning
+
+**Rule.** A top-level `exceptions:` list says which exception codes the device
+raises and what it means by each.
+
+    exceptions:
+      - code: 0x03
+        description: >-
+          A written value outside the range declared for the register. The
+          device rejects the whole request rather than clamping.
+        raised_by: [6, 16]
+      - code: 0x41
+        title: "Setting Locked In Current Mode"
+        description: >-
+          Writable in principle, but not in the mode the unit is in.
+        raised_by: [6, 16]
+        retryable: false
+
+**Why the specification is not enough, in two distinct ways.**
+
+A manufacturer may *overload* a standard code. A client that has never read
+this file falls back on its own table and displays "Illegal Data Value" for a
+code the device uses to mean something narrower or different — confidently
+wrong, which is worse than blank. And a manufacturer may define codes of its
+own, which a client can otherwise only render as a bare number: the integrator
+sees `exception 0x41` and has nothing to do with it.
+
+Underneath both is the thing an exception table is really for. Without it an
+integrator cannot distinguish a *refused* write from a *broken bus* — the
+difference between a configuration mistake and a site visit.
+
+**Silence means the standard meaning, and that is the load-bearing choice.**
+Listing a standard code with no prose says "this device raises it, as
+specified", and a client may display its own text. This is what makes the
+section affordable: a device raising nine standard codes as intended writes nine
+one-line entries, not nine paragraphs restating the specification. The cost of
+that choice is that a departure from the standard meaning becomes invisible
+unless declared, so `overloads: true` is **required** whenever a standard code's
+meaning departs, and it makes `title` and `description` mandatory with it.
+`overloads` is never written as `false`: an absent key already says that, and a
+present-and-false one would be a second way to say the same thing.
+
+`overloads` is meaningful only on a standard code. A proprietary code overloads
+nothing, having had no prior meaning to depart from — so it is an error there,
+not a redundancy.
+
+**What is derived rather than declared**, per D16. Whether a code is standard at
+all follows from the number, so nothing declares it; `validate.py` holds the
+table, including that 7 and 9 were never assigned and a device using either is
+therefore proprietary. Retryability is likewise implied for standard codes — 5
+and 6 are retryable, 1 to 3 are not — so `retryable` exists for the proprietary
+codes, where a client has no way to guess, and stating it on a standard code
+that contradicts the implication is an error rather than an override.
+
+**Two checks that make sibling sections agree**, which is the class of check
+`limits` existed for and never had:
+
+- every function code in `raised_by` has to appear in `limits.supported_fc`; an
+  exception from a function the device does not answer cannot happen
+- `limits.gaps_readable: false` is a claim that reading an unoccupied address is
+  refused, which is a claim about code 0x02 — so 0x02 has to be in the list
+
+With D19's FC 43 check, that is now three readers of `limits`. PROTOCOL-GAPS.md
+A3 called the block decorative; it is no longer.
+
+**This closes B5.** The audit asked which exceptions the device raises and when,
+and noted `gaps_readable` was a boolean answer to one corner of it. The corner
+is now the general case, and `gaps_readable` is cross-checked against it rather
+than standing in for it.
+
+**Cost, and an honest note on the AHU's entries.** Six exceptions are listed and
+every one of them is an assumption, including the claim that an out-of-range
+write is rejected rather than clamped — which is B1, still open, and now at
+least written down somewhere a firmware author can contradict. The two
+proprietary codes are invented outright: the *need* for them is real, since the
+standard has no way to say "the register is real and writable, just not right
+now", and a mode-dependent or interlocked setting has to report exactly that.
+The numbers 0x41 and 0x42 are placeholders. All of it is marked in the
+document's ASSUMPTIONS block.
+
+**Left open.** Which exception a *specific* register raises is not expressible —
+`raised_by` scopes to function codes, not addresses. A register-level exception
+list would be more precise and much more verbose, and nothing has yet needed
+it; the two proprietary codes above name their circumstances in prose instead.

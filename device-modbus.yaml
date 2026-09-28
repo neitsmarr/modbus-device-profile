@@ -35,6 +35,9 @@
 #     firmware 1.x packs major/minor as one byte each
 #   - FC 43 support, and its conformity level, are assumed rather than
 #     confirmed; a device that omits it is identified by the register probes
+#   - every exception below is assumed, including that an out-of-range write is
+#     rejected rather than clamped, and both proprietary codes are invented:
+#     the numbers 0x41 and 0x42 need confirming against firmware
 
 device:
   vendor: "3S"
@@ -53,14 +56,14 @@ addressing:
   base: data_model
 
 # How a client confirms that whatever answered at some slave address is this
-# device. Read-only, and every rule must hold; a rule that cannot be read at
-# all counts as a mismatch, because the thing being probed may be some other
+# device. Read-only, and every rule must hold; a rule that cannot be read at all
+# counts as a mismatch, because the thing being probed may be some other
 # vendor's product entirely.
-# Read Device Identification (FC 43, MEI 14) first where it answers: it asks
-# the device what it is without presuming any register map, so it cannot
-# misread a reserved address on some other vendor's product. The register
-# probes then narrow it -- and stand in for it entirely on the many devices
-# that do not implement FC 43.
+#
+# Read Device Identification (FC 43, MEI 14) comes first where it answers, since
+# it asks the device what it is without presuming any register map and so cannot
+# misread an address that means something else there. The register probes narrow
+# that result, and stand in for it entirely on the many devices lacking FC 43.
 identification:
   read_device_id:
     vendor_name: "3S"
@@ -69,6 +72,53 @@ identification:
   registers:
     - { space: holding, address: 4, equals: 4010 }     # device_type
     - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }  # firmware major 1
+
+# Which exception codes come back, and what this device means by each. A client
+# that has not read this file falls back on the standard table, so anything
+# standard and unsurprising needs no prose here -- but a standard code used to
+# mean something else has to say so, or that fallback displays the wrong text.
+# The two proprietary codes exist because the standard has no way to express
+# "the register is real and writable, just not right now", which is exactly what
+# a mode-dependent or interlocked setting has to report.
+exceptions:
+  - code: 0x02
+    description: >-
+      An address in no documented block. Unoccupied addresses inside the
+      documented blocks are readable and return zero, per limits.gaps_readable.
+    raised_by: [3, 4, 6, 16]
+  - code: 0x03
+    description: >-
+      A written value outside the range declared for the register. The device
+      rejects the whole request rather than clamping, so a partially valid
+      multi-register write applies nothing.
+    raised_by: [6, 16]
+  - code: 0x04
+    description: >-
+      The write reached non-volatile memory and the commit failed. The value in
+      RAM may already have changed, so re-read before retrying.
+  - code: 0x06
+    description: >-
+      A sensor bus rescan or a factory reset is in progress. Reads of cached
+      values continue to succeed; writes are refused until it finishes.
+    retryable: true
+  - code: 0x41
+    title: "Setting Locked In Current Mode"
+    description: >-
+      The register is writable in principle but not in the mode the unit is in
+      -- writing the ventilation level while the operating mode is not manual,
+      for instance. Change the governing setting first; retrying unchanged will
+      fail identically.
+    raised_by: [6, 16]
+    retryable: false
+  - code: 0x42
+    title: "Value Rejected By A Dependent Setting"
+    description: >-
+      The value is inside its own range but inconsistent with a related
+      register: a minimum output above its maximum, or an alert 1 level above
+      alert 2. Nothing is written, and the conflicting register has to move
+      first or move in the same request.
+    raised_by: [6, 16]
+    retryable: false
 
 limits:
   supported_fc: [3, 4, 6, 16, 43]

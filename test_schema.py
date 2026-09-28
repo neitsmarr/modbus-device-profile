@@ -234,6 +234,33 @@ def main() -> int:
          lambda d: d["identification"]["read_device_id"].update({"vendor_name": ""})),
         ("accept", "identification by FC 43 alone, with no register probe",
          lambda d: d["identification"].pop("registers")),
+
+        # ---- exceptions
+        ("reject", "an exception with no code", lambda d: d["exceptions"][0].pop("code")),
+        ("reject", "exception code 0", lambda d: d["exceptions"][0].update({"code": 0})),
+        ("reject", "an exception code that does not fit a byte",
+         lambda d: d["exceptions"][0].update({"code": 256})),
+        ("reject", "a proprietary code with no title",
+         lambda d: d["exceptions"].append({"code": 0x55, "description": "something"})),
+        ("reject", "a proprietary code with no description",
+         lambda d: d["exceptions"].append({"code": 0x55, "title": "Something"})),
+        ("accept", "a proprietary code that carries its own text",
+         lambda d: d["exceptions"].append({"code": 0x55, "title": "Something",
+                                           "description": "Explained here."})),
+        ("reject", "an overload with no replacement text",
+         lambda d: d["exceptions"][0].update({"overloads": True})),
+        ("reject", "overloads written as false rather than omitted",
+         lambda d: d["exceptions"][0].update({"overloads": False})),
+        ("accept", "a standard code overloaded, with replacement text",
+         lambda d: d["exceptions"][0].update({"overloads": True, "title": "Block Not Mapped",
+                                              "description": "Means something else here."})),
+        ("accept", "a bare standard code, displayed from the client's own table",
+         lambda d: d["exceptions"].append({"code": 0x01})),
+        ("reject", "raised_by naming something that is not a function code",
+         lambda d: d["exceptions"][0].update({"raised_by": [99]})),
+        ("reject", "an unknown key on an exception",
+         lambda d: d["exceptions"][0].update({"severity": "high"})),
+        ("reject", "an empty exceptions list", lambda d: d.update({"exceptions": []})),
     ])
 
     print()

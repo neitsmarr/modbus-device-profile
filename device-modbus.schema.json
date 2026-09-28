@@ -268,6 +268,14 @@
         }
       }
     },
+    "exceptions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/exception"
+      },
+      "description": "Which exception codes this device raises and what it means by them. Two reasons this cannot be left to the Modbus specification. A manufacturer may overload a standard code, so a client displaying the standard text out of its own table would be confidently wrong; and a manufacturer may define codes of its own, which a client can otherwise only show as a bare number. Without this section an integrator cannot tell a refused write from a broken bus, which is the difference between a configuration mistake and a site visit."
+    },
     "limits": {
       "type": "object",
       "additionalProperties": false,
@@ -340,6 +348,109 @@
       "pattern": "^[a-z][a-z0-9_]*$",
       "maxLength": 48,
       "description": "Also has to be a valid C identifier: the firmware X-macro pastes these into token names."
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "description": "One exception code this device raises. Listing a code says the device can return it, which is worth stating on its own: it tells an integrator what to expect and a commissioning tool which failures are normal rather than a broken bus.",
+      "allOf": [
+        {
+          "description": "A code with no standard meaning has nothing for a client to fall back on, so it has to bring its own text. A standard code may omit both and be displayed from the client's own table.",
+          "if": {
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "not": {
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    8,
+                    10,
+                    11
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "title",
+              "description"
+            ]
+          }
+        },
+        {
+          "description": "Declaring a code overloaded is declaring that the standard text would mislead, so the replacement text is mandatory.",
+          "if": {
+            "required": [
+              "overloads"
+            ]
+          },
+          "then": {
+            "required": [
+              "title",
+              "description"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "code": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255,
+          "description": "The exception code byte, as it arrives in the response after the function code with its high bit set. 1-6, 8, 10 and 11 are the codes Modbus defines; anything else is this vendor's own. Which of the two a code is follows from the number, so it is not declared -- validate.py holds the standard table."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short label to display instead of the standard one. Required for a proprietary code, and wherever a standard meaning is overloaded."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What this device means by the code, and what a client should do about it. For a standard code used as intended this may elaborate on the circumstances without contradicting them; where it contradicts them, set 'overloads'."
+        },
+        "overloads": {
+          "const": true,
+          "description": "Present, and always true, when this device gives a STANDARD code a meaning that departs from the standard one. It exists because silence has to mean something safe: a client that has never read this file falls back on its own table of standard codes, and would then display text that is wrong for this device. Meaningful only on a standard code -- a proprietary code overloads nothing, having had no prior meaning to depart from. Never written as false; an absent key already says that."
+        },
+        "raised_by": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              15,
+              16,
+              17,
+              23,
+              43
+            ]
+          },
+          "description": "The function codes that can return this exception, where it is not all of them. Every entry has to appear in limits.supported_fc: an exception from a function the device does not answer cannot happen."
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Whether repeating the identical request can succeed later. True where the device is merely busy or still committing, false where the request is malformed or refused outright. Worth stating on a proprietary code, since a client has no way to guess it; on a standard code it is already implied -- 5 and 6 are retryable, 1 to 3 are not -- and stating it documents the obvious."
+        }
+      }
     },
     "address": {
       "type": "integer",
