@@ -353,56 +353,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "code"
+        "code",
+        "name",
+        "description"
       ],
-      "description": "One exception code this device raises. Listing a code says the device can return it, which is worth stating on its own: it tells an integrator what to expect and a commissioning tool which failures are normal rather than a broken bus.",
-      "allOf": [
-        {
-          "description": "A code with no standard meaning has nothing for a client to fall back on, so it has to bring its own text. A standard code may omit both and be displayed from the client's own table.",
-          "if": {
-            "required": [
-              "code"
-            ],
-            "properties": {
-              "code": {
-                "not": {
-                  "enum": [
-                    1,
-                    2,
-                    3,
-                    4,
-                    5,
-                    6,
-                    8,
-                    10,
-                    11
-                  ]
-                }
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "title",
-              "description"
-            ]
-          }
-        },
-        {
-          "description": "Declaring a code overloaded is declaring that the standard text would mislead, so the replacement text is mandatory.",
-          "if": {
-            "required": [
-              "overloads"
-            ]
-          },
-          "then": {
-            "required": [
-              "title",
-              "description"
-            ]
-          }
-        }
-      ],
+      "description": "One exception code this device raises, and what it means by it. Listing a code says the device can return it, which is worth stating on its own: it tells an integrator what to expect and a commissioning tool which failures are normal rather than a broken bus. Both texts are required on every entry, standard codes included, so a consumer never needs a table of its own in order to render one.",
       "properties": {
         "code": {
           "type": "integer",
@@ -410,10 +365,11 @@
           "maximum": 255,
           "description": "The exception code byte, as it arrives in the response after the function code with its high bit set. 1-6, 8, 10 and 11 are the codes Modbus defines; anything else is this vendor's own. Which of the two a code is follows from the number, so it is not declared -- validate.py holds the standard table."
         },
-        "title": {
+        "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Short label to display instead of the standard one. Required for a proprietary code, and wherever a standard meaning is overloaded."
+          "maxLength": 40,
+          "description": "Short label for inline display -- a status line, a log entry, a cell in a table of failures -- where there is no room for the description. Capped at 40 characters, which is the longest name Modbus itself uses ('Gateway Target Device Failed To Respond', 39), so a consumer can lay out a fixed column knowing nothing will overflow it. Deliberately not called 'title' as a register's short text is: a register title is a full uncapped name, and several of them would not fit inline."
         },
         "description": {
           "type": "string",
@@ -422,33 +378,11 @@
         },
         "overloads": {
           "const": true,
-          "description": "Present, and always true, when this device gives a STANDARD code a meaning that departs from the standard one. It exists because silence has to mean something safe: a client that has never read this file falls back on its own table of standard codes, and would then display text that is wrong for this device. Meaningful only on a standard code -- a proprietary code overloads nothing, having had no prior meaning to depart from. Never written as false; an absent key already says that."
-        },
-        "raised_by": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "type": "integer",
-            "enum": [
-              1,
-              2,
-              3,
-              4,
-              5,
-              6,
-              15,
-              16,
-              17,
-              23,
-              43
-            ]
-          },
-          "description": "The function codes that can return this exception, where it is not all of them. Every entry has to appear in limits.supported_fc: an exception from a function the device does not answer cannot happen."
+          "description": "Present, and always true, when this device gives a STANDARD code a meaning that departs from the standard one. Since name and description are always given, this is not about supplying text -- it is the machine-readable warning that goes with it. A client that knows the standard table can stop applying logic keyed to the standard meaning (retry policy, diagnosis, how it phrases the failure to an installer), and generated documentation can mark the code as used non-standardly. Meaningful only on a standard code: a proprietary code overloads nothing, having had no prior meaning to depart from. Never written as false; an absent key already says that."
         },
         "retryable": {
           "type": "boolean",
-          "description": "Whether repeating the identical request can succeed later. True where the device is merely busy or still committing, false where the request is malformed or refused outright. Worth stating on a proprietary code, since a client has no way to guess it; on a standard code it is already implied -- 5 and 6 are retryable, 1 to 3 are not -- and stating it documents the obvious."
+          "description": "Whether repeating the identical request can succeed later. True where the device is merely busy or still committing, false where the request is malformed or refused outright. Worth stating on a proprietary code, since a client has no way to guess it; on a standard code it is already implied -- 5 and 6 are retryable, 1 to 3 are not -- so stating it there documents the obvious, and contradicting the implication is an error."
         }
       }
     },

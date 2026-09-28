@@ -1298,3 +1298,77 @@ document's ASSUMPTIONS block.
 `raised_by` scopes to function codes, not addresses. A register-level exception
 list would be more precise and much more verbose, and nothing has yet needed
 it; the two proprietary codes above name their circumstances in prose instead.
+
+## D21 — Correction to D20: `raised_by` is removed, and every exception carries a short name
+
+**`raised_by` is gone, and the reason it existed is worth recording as a failure
+mode.** D20 justified it by the cross-check it enabled: every function code named
+had to appear in `limits.supported_fc`. That argument is circular. The field was
+invented, and then the check on the invented field was offered as the field's
+value. A check is only worth what the data it checks is worth.
+
+Measured against a consumer, the data is worth nothing. A client handling an
+exception already knows which function code it just sent; what it needs is a
+lookup on the code it *received*. Nothing asks "which functions can return code
+3" — not the documentation generator, not a commissioning tool, not firmware.
+
+It was also unanswerable in practice. Enumerating which functions raise each
+code is firmware knowledge nobody has to hand, so the field would be filled
+plausibly rather than correctly. A field that is both unused and probably false
+is worse than an absent one: it lends false authority. All four of the AHU's
+`raised_by` entries were guesses.
+
+The `supported_fc` cross-check is not lost as a category. D19's FC 43 check
+remains, so `limits` still has a reader.
+
+**Every exception now carries a short `name`, and both texts are required.**
+
+    - code: 0x41
+      name: "Setting Locked In Current Mode"
+      description: >-
+        The register is writable in principle but not in the mode the unit is
+        in. Change the governing setting first.
+      retryable: false
+
+`name` is for inline display -- a status line, a log entry, a cell in a table of
+failures -- where there is no room for the description. It is **capped at 40
+characters**, and the cap is not arbitrary: the longest name Modbus itself uses
+is "Gateway Target Device Failed To Respond" at 39. A consumer can therefore lay
+out a fixed column and know nothing will overflow it.
+
+It is deliberately not called `title`, which is what a register's short text is
+called. A register title is a full uncapped name -- "Supply Channel 1 - Carbon
+Dioxide Alert 1 Level" is 46 characters -- and would not fit the use this field
+exists for. Two names for two different constraints is the lesser cost against
+one name that silently means "capped" in one place and "uncapped" in another.
+
+**This retires D20's "silence means the standard meaning".** Both texts are now
+required on every entry, standard codes included, so a consumer never needs a
+table of its own in order to render a failure -- which is the point of asking
+for inline display at all. The verbosity D20 was protecting against is not real:
+a device raises a handful of codes, and the AHU's six entries already carried
+descriptions.
+
+Three consequences, all simplifications:
+
+- the schema's two conditional rules are gone. "A proprietary code must bring
+  its own text" and "an overload must bring replacement text" are both subsumed
+  by requiring the text unconditionally, so `$defs/exception` now has no `allOf`
+  at all.
+- `overloads` changes job rather than going away. It is no longer about
+  *supplying* text, since text is always supplied; it is the machine-readable
+  warning that goes with it. A client that knows the standard table can stop
+  applying logic keyed to the standard meaning -- retry policy, diagnosis, how
+  it phrases the failure to an installer -- and generated documentation can mark
+  the code as used non-standardly.
+- the validator's heuristic warning is replaced. It used to flag a title that
+  differed from the standard name without `overloads` set; with a name required
+  on every entry, a paraphrase is normal and that warning would fire constantly.
+  Whether prose silently contradicts the standard meaning is a semantic claim no
+  check can make -- `overloads` is the author asserting it. What remains
+  checkable is the inverse: a code marked as overloading while still carrying
+  the standard name, where nothing a user sees will show that it differs.
+
+**Cost.** D20 shipped and was pushed, so this is a format change rather than an
+edit in progress; anything written against it needs `title` renamed to `name`
+and `raised_by` deleted. At one profile, that is two minutes.

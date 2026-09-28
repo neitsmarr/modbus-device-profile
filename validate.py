@@ -420,14 +420,13 @@ def check_identification(modbus_doc, rep: Report) -> None:
 def check_exceptions(modbus_doc, rep: Report) -> None:
     """D20: the exception table has to be decodable and consistent.
 
-    What a schema cannot check here is everything that needs the standard table
-    or a sibling section: whether a code is standard at all, whether the
-    function codes it names are ones the device answers, and whether a claim
-    made in `limits` agrees with the exceptions listed.
+    What a schema cannot check here is everything needing the standard table or
+    a sibling section: whether a code is standard at all, whether a retryability
+    claim contradicts the standard meaning, and whether what `limits` says about
+    unoccupied addresses agrees with the exceptions listed.
     """
     entries = modbus_doc.get("exceptions")
     limits = modbus_doc.get("limits") or {}
-    supported = set(limits.get("supported_fc") or [])
 
     if not entries:
         rep.warn("exceptions: absent -- an integrator cannot tell a refused write from a broken "
@@ -447,20 +446,15 @@ def check_exceptions(modbus_doc, rep: Report) -> None:
         if exc.get("overloads") and not standard:
             rep.error(f"{where}: code {code:#04x} is not a standard code, so there is no standard "
                       f"meaning for it to overload -- drop 'overloads'")
-        if standard and not exc.get("overloads"):
-            # Prose that contradicts the standard meaning without saying so is
-            # the failure this warning exists for; it can only be guessed at,
-            # so flag the one case that is mechanically visible.
-            title = exc.get("title")
-            if title and title != STANDARD_EXCEPTIONS[code]:
-                rep.warn(f"{where}: code {code:#04x} is titled '{title}' rather than "
-                         f"'{STANDARD_EXCEPTIONS[code]}' but is not marked as overloading it -- "
-                         f"a client falling back on the standard table will disagree with this file")
 
-        for fc in exc.get("raised_by") or []:
-            if supported and fc not in supported:
-                rep.error(f"{where}/raised_by: function code {fc} is not in limits.supported_fc, "
-                          f"so it can never return this exception")
+        # Whether prose silently contradicts the standard meaning is a semantic
+        # claim no check can make; `overloads` is the author asserting it. The
+        # one mechanical signal left is a name that collides with the standard
+        # one while claiming to depart from it.
+        if standard and exc.get("overloads") and exc.get("name") == STANDARD_EXCEPTIONS[code]:
+            rep.warn(f"{where}: code {code:#04x} is marked as overloading the standard meaning but "
+                     f"is still named '{STANDARD_EXCEPTIONS[code]}', so nothing displayed to a user "
+                     f"will show that it differs")
 
         if standard and "retryable" in exc:
             implied = code in RETRYABLE_STANDARD

@@ -73,51 +73,53 @@ identification:
     - { space: holding, address: 4, equals: 4010 }     # device_type
     - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }  # firmware major 1
 
-# Which exception codes come back, and what this device means by each. A client
-# that has not read this file falls back on the standard table, so anything
-# standard and unsurprising needs no prose here -- but a standard code used to
-# mean something else has to say so, or that fallback displays the wrong text.
+# Which exception codes come back, and what this device means by each. Every
+# entry carries a short `name` for inline display and a `description` for the
+# full story, standard codes included, so a tool never needs a table of its own
+# to render a failure. `overloads` is the separate warning that a standard code
+# does NOT mean what the specification says here.
+#
 # The two proprietary codes exist because the standard has no way to express
 # "the register is real and writable, just not right now", which is exactly what
 # a mode-dependent or interlocked setting has to report.
 exceptions:
   - code: 0x02
+    name: "Illegal Data Address"
     description: >-
       An address in no documented block. Unoccupied addresses inside the
       documented blocks are readable and return zero, per limits.gaps_readable.
-    raised_by: [3, 4, 6, 16]
   - code: 0x03
+    name: "Illegal Data Value"
     description: >-
       A written value outside the range declared for the register. The device
       rejects the whole request rather than clamping, so a partially valid
       multi-register write applies nothing.
-    raised_by: [6, 16]
   - code: 0x04
+    name: "Server Device Failure"
     description: >-
       The write reached non-volatile memory and the commit failed. The value in
       RAM may already have changed, so re-read before retrying.
   - code: 0x06
+    name: "Server Device Busy"
     description: >-
       A sensor bus rescan or a factory reset is in progress. Reads of cached
       values continue to succeed; writes are refused until it finishes.
     retryable: true
   - code: 0x41
-    title: "Setting Locked In Current Mode"
+    name: "Setting Locked In Current Mode"
     description: >-
       The register is writable in principle but not in the mode the unit is in
       -- writing the ventilation level while the operating mode is not manual,
       for instance. Change the governing setting first; retrying unchanged will
       fail identically.
-    raised_by: [6, 16]
     retryable: false
   - code: 0x42
-    title: "Value Rejected By A Dependent Setting"
+    name: "Value Rejected By Dependent Setting"
     description: >-
       The value is inside its own range but inconsistent with a related
       register: a minimum output above its maximum, or an alert 1 level above
       alert 2. Nothing is written, and the conflicting register has to move
       first or move in the same request.
-    raised_by: [6, 16]
     retryable: false
 
 limits:
