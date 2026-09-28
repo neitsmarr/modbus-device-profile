@@ -65,8 +65,16 @@ def numerical(sig):
 
 def decoder_for(space, reg, fields, props, unsupported):
     """A library decoder for one register."""
+    if any("bits" in f for f in fields):
+        # The library's bitwise decoder labels individual bits and nothing else,
+        # so a register packing an enum or an integer into part of itself has no
+        # representation there at all (D22).
+        wide = ", ".join(f["id"] for f in fields if "bits" in f)
+        unsupported.append(f"{space} {reg['address']}: packs values into bit spans ({wide}), "
+                           f"which the library's per-bit decoder cannot express")
+        return {"type": "numerical", "multiplier": 1}
     if any("bit" in f for f in fields):
-        bits = [{"index": f["bit"], "label": bit_label(f.get("title") or f["property"])}
+        bits = [{"index": f["bit"], "label": bit_label(f.get("title") or f["id"])}
                 for f in sorted(fields, key=lambda f: f["bit"])]
         clear = reg.get("clear_label")
         if not clear:
@@ -75,7 +83,7 @@ def decoder_for(space, reg, fields, props, unsupported):
             clear = "OK"
         return {"type": "bitwise", "default": clear, "bits": bits}
 
-    sig = props[fields[0]["property"]]
+    sig = props[fields[0]["id"]]
     stype = sig.get("type")
     if stype == "enum":
         return {"type": "dictionary",
@@ -145,7 +153,7 @@ def main(argv):
 
     # Since D21 a field carries its own meaning, so the lookup the semantic
     # document used to provide is built from the map itself.
-    props = {f["property"]: f
+    props = {f["id"]: f
              for block in modbus_doc["spaces"].values()
              for reg in block["registers"]
              for f in reg.get("fields") or []}
@@ -158,7 +166,7 @@ def main(argv):
     addr_of = {}
     for space, _base, reg in registers:
         for f in reg.get("fields") or []:
-            addr_of[f["property"]] = (space, reg["address"])
+            addr_of[f["id"]] = (space, reg["address"])
 
     unsupported: list[str] = []
     out = {"deviceName": dev["model"],
@@ -174,7 +182,7 @@ def main(argv):
                                f"reserved range has no representation in the library format")
             continue
         sig = fields[0]
-        name = reg.get("title") or sig.get("title") or sig["property"]
+        name = reg.get("title") or sig.get("title") or sig["id"]
         # The library numbers registers from 1, so go via the wire offset rather
         # than copying our address across: the two only coincide when the space
         # happens to declare a base of 1 (D17).
@@ -192,7 +200,7 @@ def main(argv):
                 acc = reg.get("access", "read_write")
                 if acc != "read_write":
                     entry["access"] = ACCESS_OUT[acc]
-            cond = condition_for(sig, addr_of, props, unsupported, fields[0]["property"])
+            cond = condition_for(sig, addr_of, props, unsupported, fields[0]["id"])
             if cond:
                 entry["condition"] = cond
 

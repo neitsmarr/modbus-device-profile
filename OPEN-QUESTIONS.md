@@ -54,6 +54,10 @@ Nothing currently exercises any of this: the AHU map has no `chars` field and no
 actually bites integrators — ABCD versus CDAB — and it is unexercised here for
 the same reason as (b).
 
+**Partly answered since:** D22 added `bits: [low, high]`, so several values of
+different widths can share one register. That covers packing *within* a register;
+the questions below are about a value that needs *more* than one.
+
 **What the format cannot express at all:** a value whose halves are not adjacent,
 high word at holding 100 and low word at holding 200. It happens, mostly in
 gateway-flattened maps. A single start address plus a derived span cannot say it.

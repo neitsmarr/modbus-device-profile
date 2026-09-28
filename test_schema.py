@@ -69,7 +69,7 @@ def main() -> int:
         for block in d["spaces"].values():
             for reg in block["registers"]:
                 for f in reg.get("fields") or []:
-                    if f.get("property") == name:
+                    if f.get("id") == name:
                         return reg
         raise AssertionError(name)
 
@@ -91,7 +91,7 @@ def main() -> int:
         ("reject", "reserved range that also carries fields",
          lambda d: hr(d).append({"from": 7, "to": 8,
                                           "reserved": "spare",
-                                          "fields": [{"property": "device_type", "encoding": "uint16"}]})),
+                                          "fields": [{"id": "device_type", "encoding": "uint16"}]})),
         ("reject", "reserved range with no prose saying why",
          lambda d: hr(d).append({"from": 7, "to": 8})),
         ("reject", "multi-field register with no title of its own",
@@ -103,7 +103,7 @@ def main() -> int:
         ("reject", "bit position above 15",
          lambda d: reg_of(d, "error_memory_fault")["fields"][0].update({"bit": 20})),
         ("reject", "unknown encoding", lambda d: reg_of(d, "device_type")["fields"][0].update({"encoding": "uint12"})),
-        ("reject", "field naming no property", lambda d: reg_of(d, "device_type")["fields"][0].pop("property")),
+        ("reject", "a field with no identifier", lambda d: reg_of(d, "device_type")["fields"][0].pop("id")),
         ("reject", "unknown key on a register", lambda d: hr(d)[0].update({"decoder": "numerical"})),
         ("reject", "function code not in Modbus", lambda d: d["limits"]["supported_fc"].append(99)),
         ("reject", "max_read_words above the Modbus limit", lambda d: d["limits"].update({"max_read_words": 200})),
@@ -113,11 +113,11 @@ def main() -> int:
                                           "reserved": "Reserved for future interface settings."})),
         ("accept", "a 32-bit value in one field",
          lambda d: d["spaces"]["input"]["registers"].append({"address": 600,
-                                          "fields": [{"property": "nvm_write_count", "encoding": "uint32",
+                                          "fields": [{"id": "nvm_write_count", "encoding": "uint32",
                                                       "type": "int"}]})),
         ("accept", "a string spanning registers",
          lambda d: d["spaces"]["input"]["registers"].append({"address": 610, "title": "Serial Number",
-                                          "fields": [{"property": "serial_number", "type": "text",
+                                          "fields": [{"id": "serial_number", "type": "text",
                                                       "encoding": "chars", "count": 8,
                                                       "max_length": 16}]})),
         # ---- A1: each space states what its numbering counts from
@@ -141,23 +141,23 @@ def main() -> int:
 
         # ---- A2: a coil is a single bit, which since D20 is its shape and not a rule
         ("accept", "a coil naming the one property it carries",
-         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable"})),
+         lambda d: coil(d, {"address": 5, "id": "supply_fan_enable"})),
         ("accept", "a reserved range of coils",
          lambda d: coil(d, {"from": 10, "to": 20, "reserved": "Spare."})),
         ("reject", "a coil choosing an encoding, when a coil is one bit",
-         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable",
+         lambda d: coil(d, {"address": 5, "id": "supply_fan_enable",
                             "encoding": "uint16"})),
         ("reject", "a coil with a bit position, when the address already is one",
-         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable", "bit": 0})),
+         lambda d: coil(d, {"address": 5, "id": "supply_fan_enable", "bit": 0})),
         ("reject", "a coil with a fields list, when it carries exactly one property",
          lambda d: coil(d, {"address": 5, "title": "Two",
-                            "fields": [{"property": "a"}, {"property": "b"}]})),
+                            "fields": [{"id": "a"}, {"id": "b"}]})),
         ("reject", "a coil carrying nothing and not reserved", lambda d: coil(d, {"address": 5})),
         ("reject", "a discrete input carrying a float32",
          lambda d: d["spaces"].update({"discrete": {"base": 1, "registers": [
-             {"address": 6, "property": "mcu_temperature", "encoding": "float32"}]}})),
+             {"address": 6, "id": "mcu_temperature", "encoding": "float32"}]}})),
         ("reject", "a clear_label on a coil, where no set of bits can be clear",
-         lambda d: coil(d, {"address": 5, "property": "supply_fan_enable", "clear_label": "OK"})),
+         lambda d: coil(d, {"address": 5, "id": "supply_fan_enable", "clear_label": "OK"})),
         ("reject", "encoding 'bit' in a 16-bit register, which says nothing about which bit",
          lambda d: reg_of(d, "device_type")["fields"][0].update({"encoding": "bit"})),
         ("reject", "count on an encoding with no elements",
@@ -253,6 +253,35 @@ def main() -> int:
          lambda d: reg_of(d, "operating_mode")["fields"][0]["enum"].update({9: "ECO"})),
         ("accept", "a hidden service register",
          lambda d: reg_of(d, "internal_voltage_3v3").update({"hidden": True})),
+
+        # ---- bit spans: several values of different widths in one register
+        ("accept", "a settings word packing a flag, two enums and an integer",
+         lambda d: hr(d).append({
+             "address": 700, "title": "Communication Settings", "access": "read_write",
+             "fields": [
+                 {"id": "transmission_mode", "bit": 0, "type": "bool",
+                  "title": "Transmission Mode", "labels": {"false": "rtu", "true": "ascii"}},
+                 {"id": "cs_baud_rate", "bits": [1, 4], "type": "enum", "title": "Baud Rate",
+                  "enum": {0: "b4800", 1: "b9600", 2: "b19200", 3: "b38400"}},
+                 {"id": "cs_parity", "bits": [5, 6], "type": "enum", "title": "Parity",
+                  "enum": {0: "none_8n1", 1: "even_8e1", 2: "odd_8o1"}},
+                 {"id": "cs_timeout", "bits": [7, 14], "type": "int", "title": "Response Timeout",
+                  "unit": "ms", "scale": 10, "range": [0, 2550]},
+                 {"id": "cs_exception_first", "bit": 15, "type": "bool",
+                  "title": "Send Exception Before Timeout"},
+             ]})),
+        ("reject", "a span with one bound",
+         lambda d: reg_of(d, "error_memory_fault")["fields"][0].update({"bits": [3]})),
+        ("reject", "a span past the top of a register",
+         lambda d: reg_of(d, "error_memory_fault")["fields"][0].update({"bits": [14, 17]})),
+        ("reject", "a field with both a bit and a span",
+         lambda d: reg_of(d, "error_memory_fault")["fields"][0].update({"bits": [2, 3]})),
+        ("reject", "a field with both a span and an encoding",
+         lambda d: reg_of(d, "device_type")["fields"][0].update({"bits": [0, 3]})),
+        ("reject", "a clear_label on a register packing an integer",
+         lambda d: hr(d).append({
+             "address": 701, "title": "Mixed", "access": "read_write", "clear_label": "OK",
+             "fields": [{"id": "mixed_int", "bits": [0, 7], "type": "int", "title": "Count"}]})),
 
         # ---- access, which the specification leaves to the vendor per address
         ("reject", "a holding register that does not state its access",

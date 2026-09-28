@@ -1523,3 +1523,92 @@ cannot express.
 **Left open.** One address meaning different things on read and on write is not
 expressible, and Modbus permits it: `OPEN-QUESTIONS.md` Q6 records the shape that
 would express it and why it is not being built yet.
+
+## D22 — A field has an `id`, and may occupy a span of bits rather than one
+
+Two changes to the same 277 fields, made together because they touch the same
+line.
+
+### `property:` becomes `id:`
+
+The key was a **foreign key whose table was deleted**. It named an entry in
+`device-properties.yaml`; D21 removed that file, so the string stopped being a
+reference and became the field's own name — and `property:` inside an object that
+*is* the property reads like `person: alice` inside a person record.
+
+**Asked directly what the key is for, the honest answer is one application:** it
+is the handle that lets one value refer to another without hardcoding an address.
+
+    writable_when: operating_mode == manual
+
+Without it that has to become `HR22 == manual`, which works — it is what the
+3SModbus library does — and breaks silently the moment the map is renumbered,
+which is the edit D14 measured. Procedure steps are the same case, and D1's
+reverse-dependency index is built from those references. The second application is
+the firmware X-macro, where the identifier becomes a C token; that one only
+matters for our own devices.
+
+So the field earns its place, and `id` names what it is. It also gives the format
+a split it lacked: **`id` is for machines, `title` is for humans.** `name:` would
+have been wrong, since `exceptions` already uses `name` for a short human label.
+
+### A field may occupy `bits: [low, high]`
+
+Real devices pack several values of different widths into one register — a
+communication settings word carrying a transmission mode flag in bit 0, a baud
+rate enum in bits 1-4, a parity enum in 5-6, a timeout integer in 7-14 and a flag
+in 15. The format could express none of it: `bit: n` covers one bit and only for
+a bool.
+
+    fields:
+      - { id: transmission_mode, bit: 0, type: bool, labels: { false: rtu, true: ascii } }
+      - { id: baud_rate, bits: [1, 4], type: enum, enum: { 0: b4800, 1: b9600 } }
+      - { id: parity, bits: [5, 6], type: enum, enum: { 0: none_8n1, 1: even_8e1 } }
+      - { id: response_timeout, bits: [7, 14], type: int, unit: "ms", scale: 10 }
+      - { id: exception_before_timeout, bit: 15, type: bool }
+
+**The alternative was to enumerate the combinations, and the arithmetic settles
+it.** 2 × 16 × 4 × 256 × 2 = **65 536**: every possible value of a 16-bit
+register. Enumeration is not a shortcut for this shape, it is a re-encoding of the
+entire value space with the structure discarded. Even in a mild case — baud and
+parity alone, 64 combinations — it would be wrong: a commissioning tool could not
+offer two controls, the labels could not compose, and changing parity would mean
+looking up a different combined value instead of writing one field.
+
+`bit: n` stays as shorthand for `bits: [n, n]`, which is the one place this format
+knowingly keeps two spellings for one fact. The reason is proportion: 87 of the 88
+existing bit fields are single, and `bits: [3, 3]` reads worse than the thing it
+describes. `bit_span()` in `validate.py` normalises the two, so exactly one
+function knows the difference and every check works in spans.
+
+**What the span makes checkable**, none of which was possible before:
+
+- spans overlapping inside one register, which was previously a per-bit check and
+  is now per-range
+- an enum with more members than its span holds: `bits: [5, 6]` carries 0..3, so a
+  five-member parity enum is a bug the format could not previously see
+- a range that does not fit after scale: 8 bits hold 0..255, so a timeout declared
+  `[0, 5000]` with `scale: 10` is raw 0..500 and does not fit
+- a bool spread over several bits, which is a modelling mistake rather than a wide
+  bool
+- a **gap** below the highest field, as a warning: an undescribed bit in a packed
+  settings word is usually an omission rather than a spare
+
+**Two consequences.** `clear_label` is now restricted to registers whose fields
+are *all* single bools: there is no all-clear state to name when one field is an
+integer, because zero there is a value rather than an absence. And a register
+using spans cannot be converted to the 3SModbus format at all — its bitwise
+decoder labels individual bits and nothing else — so the generator reports it
+rather than emitting something plausible and wrong.
+
+**A span stays inside one register.** A value crossing into the next address is a
+different feature, and mixing the two would make both harder to read; it belongs
+with `OPEN-QUESTIONS.md` Q1 if a device ever needs it.
+
+**Not yet exercised by the map.** The AHU has no such register — its baud rate and
+parity are separate registers — so this vocabulary is checked by the schema tests
+and by validator probes rather than by the document. That is the state the coil
+rules were in before D20, and the same caution applies: the first real
+multi-value register, ours or a third party's, is what will confirm the shape.
+Signed sub-fields are unhandled: a span reads out unsigned, and two's complement
+inside a span is not expressible until something needs it.

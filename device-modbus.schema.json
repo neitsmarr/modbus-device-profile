@@ -492,7 +492,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "property",
+        "id",
         "type"
       ],
       "description": "One property carried by this register, whole or as a single bit -- and everything a consumer needs in order to decode, display, validate and condition it. The identifier in `property` is the property's only name: expressions and procedures reference it.",
@@ -502,8 +502,17 @@
             "encoding"
           ],
           "not": {
-            "required": [
-              "bit"
+            "anyOf": [
+              {
+                "required": [
+                  "bit"
+                ]
+              },
+              {
+                "required": [
+                  "bits"
+                ]
+              }
             ]
           }
         },
@@ -512,16 +521,44 @@
             "bit"
           ],
           "not": {
-            "required": [
-              "encoding"
+            "anyOf": [
+              {
+                "required": [
+                  "encoding"
+                ]
+              },
+              {
+                "required": [
+                  "bits"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "bits"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "encoding"
+                ]
+              },
+              {
+                "required": [
+                  "bit"
+                ]
+              }
             ]
           }
         }
       ],
       "properties": {
-        "property": {
+        "id": {
           "$ref": "#/$defs/identifier",
-          "description": "Name of the property in the properties document."
+          "description": "This value's only name, and the one thing in the format that exists purely to be referenced: an expression or a procedure names another value by it rather than by address, which would break the moment the map is renumbered. D1's reverse-dependency index is built from those references, and the firmware X-macro pastes the same token. Two fields cannot share one."
         },
         "encoding": {
           "enum": [
@@ -541,7 +578,7 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 15,
-          "description": "Bit position, for a bool packed into this register. No encoding is given: a bit is a bit."
+          "description": "A single bit position, for a bool packed into this register. Shorthand for `bits: [n, n]`, kept because a lone bit is the overwhelmingly common case and a pair reads worse than the thing it describes. No encoding is given: a bit is a bit."
         },
         "count": {
           "type": "integer",
@@ -725,6 +762,17 @@
             "string",
             "boolean"
           ]
+        },
+        "bits": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "description": "An inclusive [low, high] span of bit positions, for a value packed into part of a register alongside others -- a communication settings word carrying a mode flag, a baud rate enum, a parity enum and a timeout in one 16-bit register. The span's width fixes the value's capacity: [5, 6] holds 0..3, so an enum with five members does not fit, and validate.py checks that. The value is read out unsigned, and `enum` keys and `range` bounds are the span's own value, not the whole register's. A span stays inside one register: a value crossing into the next address is a different thing entirely, and the format does not express it."
         }
       },
       "allOf": [
@@ -772,7 +820,7 @@
       ],
       "allOf": [
         {
-          "description": "A clear_label only means something for a register carrying bits.",
+          "description": "A clear_label names the state where none of a register's bits is set, so it only means something for a register whose fields are ALL single bools. A register packing an integer or an enum into part of itself has no all-clear state to name -- zero there is a value, not an absence.",
           "if": {
             "required": [
               "clear_label"
@@ -787,7 +835,12 @@
                 "items": {
                   "required": [
                     "bit"
-                  ]
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "bool"
+                    }
+                  }
                 }
               }
             }
@@ -930,7 +983,7 @@
         {
           "required": [
             "address",
-            "property"
+            "id"
           ],
           "not": {
             "anyOf": [
@@ -962,7 +1015,7 @@
               },
               {
                 "required": [
-                  "property"
+                  "id"
                 ]
               }
             ]
@@ -979,7 +1032,7 @@
         "to": {
           "$ref": "#/$defs/address"
         },
-        "property": {
+        "id": {
           "$ref": "#/$defs/identifier",
           "description": "The single bool this coil carries. Named directly rather than through a `fields` list: a list of one is a list that exists only to be indexed."
         },
@@ -1106,7 +1159,7 @@
     "condition": {
       "type": "object",
       "required": [
-        "property"
+        "id"
       ],
       "oneOf": [
         {
@@ -1121,7 +1174,7 @@
         }
       ],
       "properties": {
-        "property": {
+        "id": {
           "$ref": "#/$defs/property_ref"
         },
         "equals": {
@@ -1174,11 +1227,11 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "property",
+            "id",
             "value"
           ],
           "properties": {
-            "property": {
+            "id": {
               "$ref": "#/$defs/property_ref"
             },
             "value": {
@@ -1190,10 +1243,10 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "property"
+            "id"
           ],
           "properties": {
-            "property": {
+            "id": {
               "$ref": "#/$defs/property_ref"
             }
           }
@@ -1218,7 +1271,7 @@
             }
           ],
           "properties": {
-            "property": true,
+            "id": true,
             "equals": true,
             "in": true,
             "timeout_ms": {
@@ -1399,7 +1452,7 @@
     },
     "property_ref": {
       "$ref": "#/$defs/identifier",
-      "description": "The identifier of a field's `property` somewhere in this map. Procedures and expressions name fields by it, which is why it survived the semantic document it was defined in: it is the one name a device property has."
+      "description": "The `id` of a field somewhere in this map. Procedures and expressions name values by it."
     }
   }
 }

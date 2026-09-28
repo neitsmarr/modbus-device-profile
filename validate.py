@@ -170,7 +170,7 @@ def expression_identifiers(expr: str) -> set[str]:
 
 
 def field_index(doc, rep: Report) -> dict[str, dict]:
-    """Every field in the map, by the identifier its `property` gives.
+    """Every field in the map, by its `id`.
 
     That identifier is a device property's only name now (D21), so this is the
     namespace expressions, procedures and the reverse index all resolve against.
@@ -180,7 +180,7 @@ def field_index(doc, rep: Report) -> dict[str, dict]:
     out: dict[str, dict] = {}
     where: dict[str, str] = {}
     for space, reg, field, at in iter_fields(doc):
-        name = field.get("property")
+        name = field.get("id")
         if name is None:
             continue
         if name in out:
@@ -240,7 +240,7 @@ def check_references(doc, fields, rep: Report) -> None:
 
     for path, key, value in walk(doc.get("procedures") or {}):
         where = "procedures/" + "/".join(str(p) for p in path + (key,))
-        if key in ("property", "read", "enum_from") and isinstance(value, str):
+        if key in ("id", "read", "enum_from") and isinstance(value, str):
             want(value, where)
             if key == "enum_from" and value in fields and value not in enum_members:
                 rep.error(f"{where}: '{value}' has no enum to take values from")
@@ -341,6 +341,20 @@ def iter_registers(modbus_doc):
             yield space, reg, f"spaces/{space}/registers/{i}"
 
 
+def bit_span(field):
+    """The inclusive bit range a field occupies, or None if it is not packed.
+
+    `bit: n` is shorthand for `bits: [n, n]` (D22), so every check works in spans
+    and the single-bit case needs no special path.
+    """
+    if "bits" in field:
+        lo, hi = field["bits"]
+        return (lo, hi)
+    if "bit" in field:
+        return (field["bit"], field["bit"])
+    return None
+
+
 def fields_of(reg):
     """A register's fields, uniformly.
 
@@ -350,8 +364,8 @@ def fields_of(reg):
     """
     if "fields" in reg:
         return reg["fields"]
-    if "property" in reg:
-        return [{"property": reg["property"], "encoding": "bit"}]
+    if "id" in reg:
+        return [{"id": reg["id"], "encoding": "bit"}]
     return []
 
 
@@ -562,23 +576,43 @@ def check_layout(doc, fields, rep: Report) -> None:
 
         addr = reg.get("address")
         regfields = fields_of(reg)
-        if any("bit" in f for f in regfields):
+        if any(("bit" in f or "bits" in f) for f in regfields):
             claim(space, addr, f"packed bits ({at})", at, "packed")
 
         for fi, field in enumerate(regfields):
             fat = f"{at}/fields/{fi}"
-            name = field.get("property")
+            name = field.get("id")
             ftype = field.get("type")
 
-            if "bit" in field:
-                key = (space, addr, field["bit"])
-                if key in bits:
-                    rep.error(f"{fat}: bit {field['bit']} of {space} {addr} is already "
-                              f"taken by {bits[key]}")
-                bits[key] = fat
-                if ftype != "bool":
+            span = bit_span(field)
+            if span:
+                lo, hi = span
+                if hi < lo:
+                    rep.error(f"{fat}: bit span [{lo}, {hi}] runs backwards")
+                    continue
+                for b in range(lo, hi + 1):
+                    key = (space, addr, b)
+                    if key in bits:
+                        rep.error(f"{fat}: bit {b} of {space} {addr} is already taken by "
+                                  f"{bits[key]}")
+                    bits[key] = fat
+                width = hi - lo + 1
+                if width == 1 and ftype != "bool":
                     rep.error(f"{fat}: '{name}' is type '{ftype}', but only a bool can be "
                               f"carried as a single bit")
+                elif width > 1 and ftype == "bool":
+                    rep.error(f"{fat}: '{name}' is a bool spread over {width} bits; a bool "
+                              f"occupies one, and a wider span wants an int or an enum")
+                cap = (1 << width) - 1
+                if ftype == "enum":
+                    top = max((int(v) for v in (field.get("enum") or {})), default=0)
+                    if top > cap:
+                        rep.error(f"{fat}: enum value {top} does not fit {width} bit(s), which "
+                                  f"hold 0..{cap}")
+                rs = raw_span(field)
+                if rs and (rs[0] < -0.5 or rs[1] > cap + 0.5):
+                    rep.error(f"{fat}: range {field['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
+                              f"after scale, which does not fit {width} bit(s) (0..{cap})")
                 continue
 
             enc = field.get("encoding")
@@ -612,6 +646,17 @@ def check_layout(doc, fields, rep: Report) -> None:
                 if top > WIDTH_CAPACITY[enc][1]:
                     rep.error(f"{fat}: enum value {top} does not fit '{enc}'")
 
+        # A register whose fields are spans rather than whole values is a packed
+        # settings word; a gap in one is usually an omission rather than a spare.
+        spans = [bit_span(f) for f in regfields if bit_span(f)]
+        if spans:
+            used = {b for lo, hi in spans for b in range(lo, hi + 1)}
+            top = max(hi for _lo, hi in spans)
+            gaps = sorted(set(range(0, top + 1)) - used)
+            if gaps and any(hi > lo for lo, hi in spans):
+                rep.warn(f"{at}: bits {', '.join(map(str, gaps))} below the highest field are "
+                         f"described by nothing -- a gap in a packed word is usually an omission")
+
 
 def check_procedures(doc, fields, rep: Report) -> None:
     """A procedure may only touch what the map actually carries."""
@@ -620,10 +665,10 @@ def check_procedures(doc, fields, rep: Report) -> None:
         for i, step in enumerate(steps):
             targets = []
             for verb in ("write", "read"):
-                if isinstance(step.get(verb), dict) and "property" in step[verb]:
-                    targets.append(step[verb]["property"])
-            if isinstance(step.get("await"), dict) and "property" in step["await"]:
-                targets.append(step["await"]["property"])
+                if isinstance(step.get(verb), dict) and "id" in step[verb]:
+                    targets.append(step[verb]["id"])
+            if isinstance(step.get("await"), dict) and "id" in step["await"]:
+                targets.append(step["await"]["id"])
             targets += list(step.get("reread") or [])
             if isinstance(step.get("verify"), dict) and "read" in step["verify"]:
                 targets.append(step["verify"]["read"])
@@ -632,7 +677,7 @@ def check_procedures(doc, fields, rep: Report) -> None:
                     rep.error(f"procedures/{pname}/steps/{i}: targets '{ref}', which no field "
                               f"carries, so a procedure cannot reach it")
             # A write step is only meaningful where the bus accepts writes.
-            tgt = (step.get("write") or {}).get("property")
+            tgt = (step.get("write") or {}).get("id")
             if tgt in fields:
                 acc = fields[tgt]["__reg"].get("access", "read_write")
                 space = fields[tgt]["__space"]
