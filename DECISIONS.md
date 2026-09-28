@@ -974,56 +974,21 @@ will have to define.
 
 The generated file is a derived artifact and is gitignored, per D1.
 
-## D17 — The protocol document stands on its own: identity, addressing base, and how to recognise the device
+## D17 — The protocol document stands on its own
 
-**The complaint that drove it.** The register map should describe the access API
-of *any* Modbus device, ours or a third party's. Measured against that, three
-things were missing, and one of them was a defect rather than an omission.
+*Settled form of what was first recorded as D17, D19 and D22; the git history
+holds the intermediate spellings and the arguments that moved them.*
 
-**Rule 1 — the addressing base is declared, and required.**
+**The requirement.** `device-modbus.yaml` has to describe the access API of any
+Modbus device, a third party's as readily as ours. That means everything a client
+needs in order to talk to the device is in this file, and nothing is inferred
+from a semantic document that a third-party device does not have, or from
+firmware source nobody outside the vendor can read.
 
-    addressing:
-      base: data_model        # or: pdu
+Four things stood between it and that. Each is stated below as the rule, then the
+reason the obvious cheaper answer does not work.
 
-`data_model` means an address is the register number a datasheet prints,
-counted from 1, and the wire offset is `address - 1`. `pdu` means the address
-*is* the offset, counted from 0. Legacy 4xxxx/3xxxx numbering is `data_model`
-with the space prefix dropped, since the space is already a separate key.
-`base_overrides` handles the device that numbers one space differently from
-another.
-
-**Why it cannot be a convention.** The file said `address: 1`, the schema
-permitted `address: 0`, and `generate_library_json.py` mapped
-`address -> "number"` 1:1 — which silently commits to `data_model` while the
-schema's lower bound assumes `pdu`. A probe confirmed a register at address 0
-passed the schema and all three validator layers. This is the one off-by-one
-that lands in the documentation, the commissioning tool and the firmware
-simultaneously, with no diff anywhere to show it, and it is the one thing a
-third-party map is most likely to get wrong in transcription. Nothing about it
-is derivable, so it is required rather than defaulted: a default would be the
-convention again, just spelled differently.
-
-The exact bounds follow from the base — 0..65535 for `pdu`, 1..65536 for
-`data_model` — and live in `validate.py`, because a JSON Schema cannot see a
-sibling section.
-
-**Rule 2 — a coil is a single bit, and the schema now knows it.**
-
-A `coil` or `discrete` register carries exactly one field, that field's
-encoding is `bit`, and there is no `bit:` position to give: the address already
-was one. `clear_label` is meaningless there too — there is no set of bits to be
-collectively clear. Conversely `encoding: bit` is now rejected in `holding` and
-`input`, where it never said which bit.
-
-**Why this was worth the rules.** All three of these were accepted by the
-schema *and* by the validator: a coil carrying `uint16`, a coil field with
-`bit: 3`, a discrete input carrying `float32`. Both spaces were declared
-vocabulary with zero uses and zero checks, so the format promised
-bit-oriented spaces while accepting physically impossible maps in them. Two
-uses are one too few to leave unchecked: the AHU has none, and the first
-third-party device with a coil would have written nonsense that validated.
-
-**Rule 3 — the document says which device it describes.**
+### Rule 1 — the document says which device it describes
 
     device:
       vendor: "3S"
@@ -1032,70 +997,161 @@ third-party device with a coil would have written nonsense that validated.
       firmware_version:
         from: "1.0"
 
-Before this, the protocol document's top-level keys were exactly
-`['limits', 'registers']`: an anonymous list of addresses. `vendor` and `model`
-are required — `vendor` explicitly, because this format is meant to describe
-other people's products, where "the device" is not obvious from the
-repository. The firmware bound is a *range* rather than a version, since a
-register map normally outlives several releases; omitting `to` means "and
-later". D14 measured churn across firmware versions of one device and D15 split
-the documents partly so a second interface could be added later — both make
-this binding load-bearing, and it was absent from both.
+`vendor` and `model` are required. `vendor` explicitly, because the format
+describes other people's products, where "the device" is not obvious from the
+repository it sits in. The firmware bound is a **range**, not a version, since a
+register map normally outlives several releases; omitting `to` means "and later".
 
-**Rule 4 — identification is part of the protocol, because a bus scan finds an
-address, not a product.**
+Before this the document's top-level keys were exactly `['limits', 'registers']`:
+an anonymous list of addresses. D14 measured edit churn across firmware versions
+of one device and D15 split the documents partly so a second interface could be
+added later — both make this binding load-bearing, and it was absent from both
+documents.
+
+### Rule 2 — each address space declares what its numbering counts from
+
+    addressing:
+      holding: 1
+      input: 1
+
+Each entry is the address this document would write for **wire offset 0** in that
+space, so every address in the file is read as
+`offset = address - addressing[space]`. Write 1 for datasheet numbering, 0 to
+write raw offsets, or the legacy Modicon base directly — `holding: 40001`,
+`input: 30001` — which lets a map be transcribed exactly as printed.
+
+**Why this is required rather than defaulted.** The file said `address: 1`, the
+schema permitted `address: 0`, and `generate_library_json.py` copied the address
+straight into the library's 1-based register number. Three conventions, none
+stated, and a probe confirmed a register at address 0 passed the schema and every
+validator layer. This is the one off-by-one that lands in the documentation, the
+commissioning tool and the firmware simultaneously, with no diff anywhere to show
+it, and it is what a transcribed third-party map is most likely to get wrong.
+Nothing about it is derivable. A default would be the unstated convention again,
+spelled differently.
+
+**Keys are the `space` values themselves**, not `holding_registers` /
+`input_registers`: a consumer resolves `addressing[register.space]` with no
+mapping table in between, those four words are already the format's vocabulary in
+`space:`, and a coil is not a register, so the longer spelling would be wrong for
+half the spaces.
+
+**Rejected: a named convention.** `base: pdu | data_model`, with a
+`base_overrides` map for a device numbering one space differently, was the first
+form. Two mechanisms and a private vocabulary to express one integer, and the
+vocabulary had to be learned before the file could be read. The number is also
+strictly more capable: the enum could say 0 or 1 and nothing else, so legacy
+numbering was expressible only by instructing the author to strip the prefix —
+after which the map silently differed from the datasheet it was copied from.
+
+**It also fixed a live bug.** The generator emitted `"number": reg["address"]`,
+which is correct only when the base happens to be 1. It now computes
+`address - base + 1`. The output is unchanged for this device, which is precisely
+why the bug went unnoticed: one profile with base 1 cannot distinguish the two.
+
+### Rule 3 — a coil is a single bit, and the schema knows it
+
+A `coil` or `discrete` register carries exactly one field, that field's encoding
+is `bit`, and there is no `bit:` position to give — the address already was one.
+`clear_label` is meaningless there too: there is no set of bits to be
+collectively clear. Conversely `encoding: bit` is rejected in `holding` and
+`input`, where it never said which bit. `count` is confined to `chars`, being an
+element count on an encoding that has no elements otherwise.
+
+**Why it needed rules at all.** All three of these were accepted by the schema
+*and* by the validator: a coil carrying `uint16`, a coil field with `bit: 3`, a
+discrete input carrying `float32`. Both spaces were declared vocabulary with zero
+uses and zero checks, so the format promised bit-oriented spaces while accepting
+physically impossible maps in them. Zero uses is one too few to leave unchecked:
+the AHU has no coils, and the first third-party device with one would have
+written nonsense that validated.
+
+### Rule 4 — the document says how to recognise the device
 
     identification:
+      read_device_id:
+        vendor_name: "3S"
+        product_code: "AHU-1"
+        conformity_level: 1
       registers:
         - { space: holding, address: 4, equals: 4010 }
         - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }
-      report_device_id:
-        vendor_name: "3S"
-        product_code: "AHU-1"
 
-Four properties this shape was chosen for:
+A bus scan finds an address, not a product. Without this, choosing which profile
+applies is left to whoever is holding the laptop.
 
-- **Read-only.** Probing an unidentified device must never change it. Only
-  reads are expressible; there is no write probe and no unlock step.
+**Read Device Identification (FC 43, MEI type 14) comes first where it answers.**
+It is the only way to ask a Modbus device what it is without already knowing its
+register map. A register probe reads an address chosen from *this* profile, which
+on another vendor's product may be reserved, absent, or meaningful in a way that
+coincidentally matches; FC 43 cannot make that mistake, because the question is
+about identity rather than about an address. `conformity_level` is stated because
+it decides which objects a client may ask for at all — a level 1 device returns
+only vendor name, product code and revision — and whether individual objects may
+be requested by id rather than streamed. Getting that wrong turns a safe
+identification call into an exception.
+
+**It is not the only mechanism, because FC 43 is optional in Modbus and widely
+unimplemented.** The second real device in front of this format, the DSCDG3-4
+duct sensor, identifies itself through a device-type holding register and nothing
+else. A format requiring FC 43 would describe a minority of the devices it is
+meant to cover. Hence both, with at least one required and either accepted alone.
+`limits.supported_fc` accordingly admits 17 and 43 alongside the data-access
+codes, so a device can declare the call a profile relies on; expecting FC 43
+objects from a device that does not answer FC 43 is a profile that could never
+identify anything, and `validate.py` rejects that pair.
+
+**Four properties the probe shape was chosen for:**
+
+- **Read-only.** Probing an unidentified device must never change it. There is no
+  write probe and no unlock step.
 - **A failed read is a mismatch, not an error.** The thing being probed may be
   another vendor's product, where the address is reserved, absent, or answers
-  exception 02. Treating that as a fault would make detection unusable on
-  exactly the bus it exists for.
+  exception 02. Treating that as a fault would make detection unusable on exactly
+  the bus it exists for.
 - **Raw values, never decoded ones.** A scale or an enum mapping presumes the
   profile being tested, so comparing decoded values would beg the question.
-  `mask` covers the register that packs a product id beside something volatile.
+  `mask` covers a register packing a product id beside something volatile.
 - **Conjunction, cheapest rule first.** Every rule must hold, so a profile
-  matching nothing is safer than one matching the wrong device, and a client
-  may stop at the first mismatch.
+  matching nothing is safer than one matching the wrong device, and a client may
+  stop at the first mismatch.
 
-`report_device_id` carries the expected objects from Read Device Identification
-(FC 43, MEI type 14). It is the only identification that needs no prior
-knowledge of a device's map, which makes it the right first probe where a
-device implements it — and FC 43 is optional in Modbus, which is why register
-probes exist alongside it rather than instead of it.
+### What lives in the validator rather than the schema
 
-`validate.py` checks what the shape cannot: no register probed twice (two
-rules on one register either agree, and one is noise, or disagree, and nothing
-matches), no expected value with bits outside its own mask, no empty range, and
-no probe on a coil or discrete input, since one bit cannot discriminate between
-products. A probe naming an address outside the documented map is a warning
-rather than an error — a device id register may legitimately sit outside it,
-but the usual cause is a typo. A document with no `identification` at all is a
-warning too.
+Everything that depends on a sibling section, since a JSON Schema cannot see one:
 
-**Cost.** Three formerly optional sections are now required, so every existing
-map needs a header before it validates — acceptable at two documents, and the
-reason to do it now rather than at twenty. `identification` is the first
-vocabulary here aimed at a consumer's *behaviour* rather than at the device's
-facts, which sits slightly uneasily beside D16's rule that the map carries only
-what cannot be derived; it earns its place because nothing else in either
-document answers "is this that device?", and that question has to be answered
-before any other fact in the file can be trusted.
+- a space the map uses has to declare a base, and a base declared for a space
+  nothing uses is a warning
+- an address has to fall inside `base .. base + 0xFFFF`; the schema keeps only a
+  bound generous enough for six-digit numbering
+- no register probed twice — two rules on one register either agree, and one is
+  noise, or disagree, and nothing matches
+- no expected value with bits set outside its own mask, and no empty range
+- no probe on a coil or discrete input: one bit cannot discriminate between
+  products
+- FC 43 expectations require 43 in `supported_fc`, and a device declaring 43 with
+  nothing to match against is an identification path left on the floor
 
-**Left open.** Whether two profiles' identification rules are mutually
-exclusive is checkable, and cannot be checked from inside one document — it
-needs a library of them. That is the right check to add when there is a
-directory of profiles rather than one.
+A probe naming an address outside the documented map is a warning rather than an
+error — a device id register may legitimately sit outside it, but the usual cause
+is a typo. A document with no `identification` at all is a warning too.
+
+### Cost
+
+Three formerly optional sections are required, so every existing map needs a
+header before it validates — acceptable at two documents, and the reason to do it
+at two rather than at twenty. `identification` is also the first vocabulary here
+aimed at a consumer's *behaviour* rather than at the device's facts, which sits
+slightly uneasily beside D16's rule that the map carries only what cannot be
+derived. It earns its place because nothing else in either document answers "is
+this that device?", and that has to be answered before any other fact in the file
+can be trusted.
+
+### Left open
+
+Whether two profiles' identification rules are mutually exclusive is checkable
+and cannot be checked from inside one document — it needs a library of them. That
+is the right check to add when there is a directory of profiles rather than one.
 
 ## D18 — Every register carries its own title and description, because nothing else can
 
@@ -1166,264 +1222,115 @@ mechanical once the prose exists.
 gap the audit missed, because the audit asked what a *client* needs to talk to
 the device and this is what a *reader* needs to understand it.
 
-## D19 — FC 43 is declarable, and identification prefers it
+## D19 — Exception codes are part of the interface
 
-**Rule.** `limits.supported_fc` accepts 17 and 43, and
-`identification.read_device_id` states the objects a device returns from Read
-Device Identification -- function code 43 with MEI type 14 -- along with its
-conformity level.
+*Settled form of what was first recorded as D20 and D21; the git history holds
+the intermediate spellings and the arguments that moved them.*
 
-**The inconsistency that prompted it.** D17 added the FC 43 expectations but not
-the ability to declare FC 43, whose enum held only the data-access codes
-`[1, 2, 3, 4, 5, 6, 15, 16, 23]`. So the AHU profile stated what FC 43 should
-return while declaring a device that does not answer FC 43 -- a profile that
-could never identify anything. `validate.py` now rejects exactly that pair, and
-warns on the opposite one: a device declaring 43 with no objects stated to match
-against is an identification path left on the floor.
-
-That check is also the first thing in this repository that *reads* `limits`
-rather than merely declaring it, which is the defect PROTOCOL-GAPS.md A3 names.
-A3 is not closed -- `max_read_words`, `gaps_readable` and `turnaround_ms` are
-still consumed by nothing -- but the block is no longer entirely decorative.
-
-**Why FC 43 goes first, ahead of the register probes.** It is the only way to
-ask a Modbus device what it is without already knowing its register map. A
-register probe on an unidentified device reads an address chosen from *this*
-profile, which on some other vendor's product may be reserved, absent, or
-meaningful in a way that coincidentally matches. FC 43 cannot make that mistake:
-the question is about identity, not about an address. So where a device answers
-it, it is both cheaper and safer, and the register probes narrow the result.
-
-**Why it is not the only mechanism.** FC 43 is optional in Modbus and widely
-unimplemented -- the second real device in front of this format, the DSCDG3-4
-duct sensor, identifies itself through a device-type holding register and
-nothing else. A format that required FC 43 would describe a minority of the
-devices it is meant to cover. Hence both, with `identification` requiring at
-least one and accepting either alone.
-
-`conformity_level` is stated because it tells a client which objects it may ask
-for at all -- a level 1 device returns only vendor name, product code and
-revision -- and whether individual objects may be requested by id rather than
-streamed. Getting that wrong turns a safe identification call into an exception.
-
-**Naming correction.** D17 called this block `report_device_id` and its prose
-conflated two different function codes: 17 is Report Server ID, a serial-line
-call returning a vendor-defined blob, while 43/14 is Read Device Identification
-with the numbered object list this block actually describes. The block is now
-`read_device_id` and describes only FC 43. 17 remains declarable in
-`supported_fc`, since a device may answer it, but nothing here matches on its
-contents: its payload is vendor-defined, so there is no portable way to.
-
-## D20 — Exception codes are part of the interface, and silence has to mean the standard meaning
-
-**Rule.** A top-level `exceptions:` list says which exception codes the device
-raises and what it means by each.
+**Rule.** A top-level `exceptions:` list says which codes the device raises and
+what it means by each. Every entry carries `code`, a short `name` and a
+`description`; `retryable` and `overloads` are optional.
 
     exceptions:
       - code: 0x03
+        name: "Illegal Data Value"
         description: >-
-          A written value outside the range declared for the register. The
-          device rejects the whole request rather than clamping.
-        raised_by: [6, 16]
+          A written value outside the range declared for the register. The device
+          rejects the whole request rather than clamping, so a partially valid
+          multi-register write applies nothing.
       - code: 0x41
-        title: "Setting Locked In Current Mode"
+        name: "Setting Locked In Current Mode"
         description: >-
-          Writable in principle, but not in the mode the unit is in.
-        raised_by: [6, 16]
+          Writable in principle, but not in the mode the unit is in. Change the
+          governing setting first; retrying unchanged will fail identically.
         retryable: false
 
-**Why the specification is not enough, in two distinct ways.**
+**Why the specification is not enough, in two distinct ways.** A manufacturer may
+*overload* a standard code, so a client falling back on its own table displays
+"Illegal Data Value" for a code this device uses to mean something narrower —
+confidently wrong, which is worse than blank. And a manufacturer may define codes
+of its own, which a client can otherwise only render as a bare number: the
+integrator sees `exception 0x41` and has nothing to do with it.
 
-A manufacturer may *overload* a standard code. A client that has never read
-this file falls back on its own table and displays "Illegal Data Value" for a
-code the device uses to mean something narrower or different — confidently
-wrong, which is worse than blank. And a manufacturer may define codes of its
-own, which a client can otherwise only render as a bare number: the integrator
-sees `exception 0x41` and has nothing to do with it.
-
-Underneath both is the thing an exception table is really for. Without it an
+Underneath both is what an exception table is really for. Without it an
 integrator cannot distinguish a *refused* write from a *broken bus* — the
 difference between a configuration mistake and a site visit.
 
-**Silence means the standard meaning, and that is the load-bearing choice.**
-Listing a standard code with no prose says "this device raises it, as
-specified", and a client may display its own text. This is what makes the
-section affordable: a device raising nine standard codes as intended writes nine
-one-line entries, not nine paragraphs restating the specification. The cost of
-that choice is that a departure from the standard meaning becomes invisible
-unless declared, so `overloads: true` is **required** whenever a standard code's
-meaning departs, and it makes `title` and `description` mandatory with it.
-`overloads` is never written as `false`: an absent key already says that, and a
-present-and-false one would be a second way to say the same thing.
+**Both texts are required on every entry, standard codes included.** `name` is
+the short label for inline display — a status line, a log entry, a cell in a
+table of failures — where there is no room for the description. It is **capped at
+40 characters**, and the cap is not arbitrary: the longest name Modbus itself
+uses is "Gateway Target Device Failed To Respond" at 39. A consumer can therefore
+lay out a fixed column and know nothing will overflow it, and never needs a table
+of its own in order to render a failure.
 
-`overloads` is meaningful only on a standard code. A proprietary code overloads
-nothing, having had no prior meaning to depart from — so it is an error there,
-not a redundancy.
+It is deliberately not called `title`, which is what a register's short text is
+called. A register title is a full uncapped name — "Supply Channel 1 - Carbon
+Dioxide Alert 1 Level" is 46 characters — and would not fit the use this field
+exists for. Two names for two different constraints is the lesser cost against
+one name that silently means "capped" in one place and "uncapped" in another.
+
+**`overloads` is the machine-readable warning, not a way of supplying text.**
+Since name and description are always given, its job is to tell a client that
+knows the standard table to stop applying logic keyed to the standard meaning —
+retry policy, diagnosis, how it phrases the failure to an installer — and to let
+generated documentation mark the code as used non-standardly. It is meaningful
+only on a standard code: a proprietary code overloads nothing, having had no
+prior meaning to depart from, so it is an error there rather than a redundancy.
+It is never written as `false`; an absent key already says that.
 
 **What is derived rather than declared**, per D16. Whether a code is standard at
 all follows from the number, so nothing declares it; `validate.py` holds the
 table, including that 7 and 9 were never assigned and a device using either is
 therefore proprietary. Retryability is likewise implied for standard codes — 5
 and 6 are retryable, 1 to 3 are not — so `retryable` exists for the proprietary
-codes, where a client has no way to guess, and stating it on a standard code
-that contradicts the implication is an error rather than an override.
+codes, where a client has no way to guess, and stating it on a standard code in
+contradiction of the implication is an error rather than an override.
 
-**Two checks that make sibling sections agree**, which is the class of check
-`limits` existed for and never had:
+**Checks that need the standard table or a sibling section:** no code declared
+twice; `overloads` only on a standard code; no `retryable` contradicting a
+standard meaning; a code marked as overloading while still carrying the standard
+name, where nothing a user sees would show that it differs; and
+`limits.gaps_readable: false` — a claim that reading an unoccupied address is
+refused, and therefore a claim about code 0x02, which then has to be in the list.
 
-- every function code in `raised_by` has to appear in `limits.supported_fc`; an
-  exception from a function the device does not answer cannot happen
-- `limits.gaps_readable: false` is a claim that reading an unoccupied address is
-  refused, which is a claim about code 0x02 — so 0x02 has to be in the list
-
-With D19's FC 43 check, that is now three readers of `limits`. PROTOCOL-GAPS.md
-A3 called the block decorative; it is no longer.
-
-**This closes B5.** The audit asked which exceptions the device raises and when,
-and noted `gaps_readable` was a boolean answer to one corner of it. The corner
-is now the general case, and `gaps_readable` is cross-checked against it rather
-than standing in for it.
-
-**Cost, and an honest note on the AHU's entries.** Six exceptions are listed and
-every one of them is an assumption, including the claim that an out-of-range
-write is rejected rather than clamped — which is B1, still open, and now at
-least written down somewhere a firmware author can contradict. The two
-proprietary codes are invented outright: the *need* for them is real, since the
-standard has no way to say "the register is real and writable, just not right
-now", and a mode-dependent or interlocked setting has to report exactly that.
-The numbers 0x41 and 0x42 are placeholders. All of it is marked in the
-document's ASSUMPTIONS block.
-
-**Left open.** Which exception a *specific* register raises is not expressible —
-`raised_by` scopes to function codes, not addresses. A register-level exception
-list would be more precise and much more verbose, and nothing has yet needed
-it; the two proprietary codes above name their circumstances in prose instead.
-
-## D21 — Correction to D20: `raised_by` is removed, and every exception carries a short name
-
-**`raised_by` is gone, and the reason it existed is worth recording as a failure
-mode.** D20 justified it by the cross-check it enabled: every function code named
-had to appear in `limits.supported_fc`. That argument is circular. The field was
-invented, and then the check on the invented field was offered as the field's
-value. A check is only worth what the data it checks is worth.
+**Rejected: `raised_by`.** A list of the function codes that can return each
+exception. It was justified by the cross-check it enabled — every code named had
+to appear in `limits.supported_fc` — which is circular: the field was invented,
+and then the check on the invented field was offered as the field's value. A
+check is worth only what the data it checks is worth.
 
 Measured against a consumer, the data is worth nothing. A client handling an
-exception already knows which function code it just sent; what it needs is a
-lookup on the code it *received*. Nothing asks "which functions can return code
-3" — not the documentation generator, not a commissioning tool, not firmware.
+exception already knows which function code it sent; what it needs is a lookup on
+the code it *received*. Nothing asks "which functions can return code 3" — not
+the documentation generator, not a commissioning tool, not firmware. It was also
+unanswerable in practice, since enumerating it is firmware knowledge nobody has
+to hand, so all four of the AHU's entries were guesses. A field both unused and
+probably false is worse than an absent one: it lends false authority.
 
-It was also unanswerable in practice. Enumerating which functions raise each
-code is firmware knowledge nobody has to hand, so the field would be filled
-plausibly rather than correctly. A field that is both unused and probably false
-is worse than an absent one: it lends false authority. All four of the AHU's
-`raised_by` entries were guesses.
+**Also rejected: "silence means the standard meaning".** Letting a standard code
+be listed bare, with the client supplying its text, kept the section terse and
+was the first form. It fails the thing the section is for: a consuming tool
+displaying a failure inline would need its own table, and would not have one for
+proprietary codes. The verbosity it protected against is not real — a device
+raises a handful of codes, and all six of the AHU's entries carried descriptions
+already. Dropping it also removed both of the schema's conditional rules, so
+`$defs/exception` has no `allOf` at all.
 
-The `supported_fc` cross-check is not lost as a category. D19's FC 43 check
-remains, so `limits` still has a reader.
+**This closes gap B5**, and gives `limits` a reader beyond D17's FC 43 check, so
+PROTOCOL-GAPS.md's charge that the block is decorative no longer holds — though
+`max_read_words`, `turnaround_ms` and the rest are still consumed by nothing.
 
-**Every exception now carries a short `name`, and both texts are required.**
+**Cost, and an honest note on the AHU's entries.** Six exceptions are listed and
+every one is an assumption, including the claim that an out-of-range write is
+rejected rather than clamped — which is gap B1, still open, and now at least
+written where a firmware author can contradict it. The two proprietary codes are
+invented outright: the *need* is real, since the standard has no way to say "the
+register is real and writable, just not right now", and a mode-dependent or
+interlocked setting has to report exactly that. The numbers 0x41 and 0x42 are
+placeholders. All of it is marked in the document's ASSUMPTIONS block.
 
-    - code: 0x41
-      name: "Setting Locked In Current Mode"
-      description: >-
-        The register is writable in principle but not in the mode the unit is
-        in. Change the governing setting first.
-      retryable: false
-
-`name` is for inline display -- a status line, a log entry, a cell in a table of
-failures -- where there is no room for the description. It is **capped at 40
-characters**, and the cap is not arbitrary: the longest name Modbus itself uses
-is "Gateway Target Device Failed To Respond" at 39. A consumer can therefore lay
-out a fixed column and know nothing will overflow it.
-
-It is deliberately not called `title`, which is what a register's short text is
-called. A register title is a full uncapped name -- "Supply Channel 1 - Carbon
-Dioxide Alert 1 Level" is 46 characters -- and would not fit the use this field
-exists for. Two names for two different constraints is the lesser cost against
-one name that silently means "capped" in one place and "uncapped" in another.
-
-**This retires D20's "silence means the standard meaning".** Both texts are now
-required on every entry, standard codes included, so a consumer never needs a
-table of its own in order to render a failure -- which is the point of asking
-for inline display at all. The verbosity D20 was protecting against is not real:
-a device raises a handful of codes, and the AHU's six entries already carried
-descriptions.
-
-Three consequences, all simplifications:
-
-- the schema's two conditional rules are gone. "A proprietary code must bring
-  its own text" and "an overload must bring replacement text" are both subsumed
-  by requiring the text unconditionally, so `$defs/exception` now has no `allOf`
-  at all.
-- `overloads` changes job rather than going away. It is no longer about
-  *supplying* text, since text is always supplied; it is the machine-readable
-  warning that goes with it. A client that knows the standard table can stop
-  applying logic keyed to the standard meaning -- retry policy, diagnosis, how
-  it phrases the failure to an installer -- and generated documentation can mark
-  the code as used non-standardly.
-- the validator's heuristic warning is replaced. It used to flag a title that
-  differed from the standard name without `overloads` set; with a name required
-  on every entry, a paraphrase is normal and that warning would fire constantly.
-  Whether prose silently contradicts the standard meaning is a semantic claim no
-  check can make -- `overloads` is the author asserting it. What remains
-  checkable is the inverse: a code marked as overloading while still carrying
-  the standard name, where nothing a user sees will show that it differs.
-
-**Cost.** D20 shipped and was pushed, so this is a format change rather than an
-edit in progress; anything written against it needs `title` renamed to `name`
-and `raised_by` deleted. At one profile, that is two minutes.
-
-## D22 — Correction to D17: the addressing base is a number per space, not a named convention
-
-**Rule.**
-
-    addressing:
-      holding: 1
-      input: 1
-
-Each entry is the address this document would write for **wire offset 0** in
-that space. Every address in the file is then read as
-`offset = address - addressing[space]`.
-
-**D17's enum is gone.** It offered `base: pdu | data_model`, plus a
-`base_overrides` map for a device numbering one space differently. That was two
-mechanisms and a private vocabulary to express one integer, and the vocabulary
-had to be learned before the file could be read.
-
-**The number is strictly more capable, which is the part worth recording.** The
-enum could say 0 or 1 and nothing else. Legacy Modicon numbering — holding
-register 40001, input register 30001 — was expressible under D17 only by
-instructing the author to strip the prefix and write `data_model`, so a
-transcribed map silently differed from the datasheet it was copied from. Now
-`holding: 40001` states it, addresses are written exactly as printed, and the
-offsets come out right. A simplification that also removes a restriction is rare
-enough to note.
-
-**Keys are the `space` values themselves**, not `holding_registers` /
-`input_registers`. Two reasons. A consumer resolves `addressing[register.space]`
-with no mapping table in between, and the four words are already the format's
-vocabulary in `space:`. And a coil is not a register — it is one bit — so
-`coil_registers` would be wrong for half the spaces the format supports.
-
-**What moved between the layers.** The legal window is now
-`base .. base + 0xFFFF`, which depends on a sibling section, so the schema keeps
-only a generous bound — enough for six-digit numbering — and `validate.py`
-enforces the real one. That reclassified one existing test: "address above
-65535" was a schema rejection and is now a validator error, so the schema case
-was rewritten to reject an address no numbering scheme could reach, and the
-window itself is checked where it can be. Two new checks come with it: a space
-the map uses must declare a base, and a base declared for a space nothing uses
-is a warning.
-
-**It also fixed a live bug in the generator.** `generate_library_json.py`
-emitted `"number": reg["address"]`, copying our address straight into the
-library's 1-based register number. That is only correct when the base happens to
-be 1. It now computes `address - base + 1`, so a profile written with raw
-offsets or legacy numbering converts correctly. The output is unchanged for this
-device, which is exactly why the bug survived D17 unnoticed: the one profile in
-hand could not distinguish the two.
-
-**Cost.** Another format change to something already pushed, and the third
-revision of this section in as many days. The direction has been consistent
-though — D17 stated the fact, D22 states it as data rather than as a word — and
-the AHU edit was two lines.
+**Left open.** Which exception a *specific register* raises is not expressible.
+A register-level exception list would be more precise and much more verbose, and
+nothing has needed it; the two proprietary codes name their circumstances in
+prose instead.

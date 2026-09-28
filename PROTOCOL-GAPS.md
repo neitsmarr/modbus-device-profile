@@ -9,12 +9,12 @@ against the two documents, the validator, the generator, or a mutation probe
 that was actually run. Findings are split by who can close them — a format
 defect I can fix, or a firmware fact only the device author knows.
 
-**Status.** A1, A2 and A4 are closed by D17, which also added `identification:`
-for device detection; A5 went with them. D19 made FC 43 declarable and gave
-`limits` its first reader, which does not close A3 but ends its decorativeness.
-D20 added `exceptions:` and closed B5, and gave `limits` two more readers — with
-D19's that is three, so A3's "decorative" charge no longer holds even though its
-remaining keys are still unread. A6, A7, B1–B4, B6 and B7 are still open.
+**Status.** A1, A2, A4 and A5 are closed by D17, which made the protocol document
+self-describing: device identity, a per-space addressing base, single-bit coil and
+discrete spaces, and `identification:` for recognising the device on a bus. D19
+added `exceptions:` and closed B5. Between them `limits` gained two readers, so
+A3's "decorative" charge no longer holds even though its remaining keys are still
+consumed by nothing. A6, A7, B1–B4, B6 and B7 are still open.
 
 This audit also **missed one**, recorded as D18: no register carried a title or
 a description except the 19 the schema forced, because the audit asked what a
@@ -196,10 +196,10 @@ since none is used.
 
 ### B5. Which exceptions does the device raise, and when?
 
-**CLOSED by D20** — `exceptions:` now holds the codes, their per-device meaning,
-an explicit `overloads` flag for a standard code used to mean something else,
-and prose for proprietary codes. `gaps_readable` is cross-checked against code
-0x02 rather than standing in for it. The AHU's six entries are all assumptions.
+**CLOSED by D19** — `exceptions:` now holds the codes, a short name and prose for
+each, and an explicit `overloads` flag for a standard code used to mean something
+else. `gaps_readable` is cross-checked against code 0x02 rather than standing in
+for it. The AHU's six entries are all assumptions.
 
 `gaps_readable: true` is a boolean answer to one corner of this (does reading
 an unoccupied address raise exception 02?). Nothing covers illegal function,

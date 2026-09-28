@@ -167,7 +167,7 @@ def main(argv):
         name = reg.get("title") or sig["title"]
         # The library numbers registers from 1, so go via the wire offset rather
         # than copying our address across: the two only coincide when this
-        # document happens to declare a base of 1 (D22).
+        # document happens to declare a base of 1 (D17).
         base = modbus_doc["addressing"][reg["space"]]
         entry = {"number": reg["address"] - base + 1, "name": name,
                  "decoder": decoder_for(reg, fields, props, unsupported)}

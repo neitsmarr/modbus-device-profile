@@ -434,7 +434,7 @@ def check_identification(modbus_doc, rep: Report) -> None:
 
 
 def check_exceptions(modbus_doc, rep: Report) -> None:
-    """D20: the exception table has to be decodable and consistent.
+    """D19: the exception table has to be decodable and consistent.
 
     What a schema cannot check here is everything needing the standard table or
     a sibling section: whether a code is standard at all, whether a retryability
@@ -446,7 +446,7 @@ def check_exceptions(modbus_doc, rep: Report) -> None:
 
     if not entries:
         rep.warn("exceptions: absent -- an integrator cannot tell a refused write from a broken "
-                 "bus, and a proprietary code can only be shown as a bare number (D20)")
+                 "bus, and a proprietary code can only be shown as a bare number (D19)")
         return
 
     seen: dict[int, int] = {}
