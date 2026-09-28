@@ -16,6 +16,12 @@
 # were derived from a range, widening that range in the semantic document would
 # silently change the wire format (D16).
 #
+# This document is meant to stand on its own: which device it describes, how
+# its addresses are numbered, how a client recognises it on the bus, and what
+# the transport tolerates are all stated here rather than assumed. That is what
+# makes it usable for a third-party product, where there is no semantic
+# document and no firmware source to fall back on.
+#
 # ASSUMPTIONS, all needing confirmation against firmware:
 #   - every address here is invented; only the layout style is borrowed from
 #     the company library
@@ -25,6 +31,36 @@
 #   - unoccupied ranges are not marked: whether a gap is reserved for future
 #     use or merely unassigned is a firmware fact, and 23 holding ranges are
 #     currently unaccounted for
+#   - the identification rules below assume device_type reads 4010 and that
+#     firmware 1.x packs major/minor as one byte each
+
+device:
+  vendor: "3S"
+  model: "AHU-1"
+  description: "Residential air handling unit with heat recovery"
+  type: 4010                  # placeholder series id
+  firmware_version:
+    from: "1.0"               # no 'to': this map holds for 1.0 and later
+
+# What the `address:` numbers below count from. Every address here is a
+# register number as a datasheet prints it, so the wire offset is address - 1:
+# holding 1 is read with FC3 at offset 0. Stating this is the whole point --
+# the same file read under the other convention is silently off by one
+# everywhere.
+addressing:
+  base: data_model
+
+# How a client confirms that whatever answered at some slave address is this
+# device. Read-only, and every rule must hold; a rule that cannot be read at
+# all counts as a mismatch, because the thing being probed may be some other
+# vendor's product entirely.
+identification:
+  registers:
+    - { space: holding, address: 4, equals: 4010 }     # device_type
+    - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }  # firmware major 1
+  report_device_id:
+    vendor_name: "3S"
+    product_code: "AHU-1"
 
 limits:
   supported_fc: [3, 4, 6, 16]

@@ -163,9 +163,63 @@ def main() -> int:
          lambda d: d["registers"].append({"space": "input", "address": 610, "title": "Serial Number",
                                           "fields": [{"property": "serial_number",
                                                       "encoding": "chars", "count": 8}]})),
-        ("accept", "a register on a coil",
+        # ---- A1: the addressing base
+        ("reject", "no addressing section", lambda d: d.pop("addressing")),
+        ("reject", "addressing with no base", lambda d: d["addressing"].pop("base")),
+        ("reject", "a base that is neither convention", lambda d: d["addressing"].update({"base": "one"})),
+        ("reject", "a base override on something that is not a space",
+         lambda d: d["addressing"].update({"base_overrides": {"register": "pdu"}})),
+        ("accept", "a space numbered differently from the rest",
+         lambda d: d["addressing"].update({"base_overrides": {"input": "pdu"}})),
+
+        # ---- A2: a coil is a single bit
+        ("accept", "a coil carrying one bit-encoded property",
+         lambda d: d["registers"].append({"space": "coil", "address": 5,
+                                          "fields": [{"property": "supply_fan_enable", "encoding": "bit"}]})),
+        ("reject", "a coil carrying a uint16",
+         lambda d: d["registers"].append({"space": "coil", "address": 5,
+                                          "fields": [{"property": "supply_fan_enable", "encoding": "uint16"}]})),
+        ("reject", "a coil with a bit position, when the address already is one",
          lambda d: d["registers"].append({"space": "coil", "address": 5,
                                           "fields": [{"property": "supply_fan_enable", "bit": 0}]})),
+        ("reject", "a coil carrying two properties",
+         lambda d: d["registers"].append({"space": "coil", "address": 5, "title": "Two",
+                                          "fields": [{"property": "a", "encoding": "bit"},
+                                                     {"property": "b", "encoding": "bit"}]})),
+        ("reject", "a discrete input carrying a float32",
+         lambda d: d["registers"].append({"space": "discrete", "address": 6,
+                                          "fields": [{"property": "mcu_temperature", "encoding": "float32"}]})),
+        ("reject", "a clear_label on a coil, where no set of bits can be clear",
+         lambda d: d["registers"].append({"space": "coil", "address": 5, "clear_label": "OK",
+                                          "fields": [{"property": "supply_fan_enable", "encoding": "bit"}]})),
+        ("reject", "encoding 'bit' in a 16-bit register, which says nothing about which bit",
+         lambda d: reg_of(d, "device_type")["fields"][0].update({"encoding": "bit"})),
+        ("reject", "count on an encoding with no elements",
+         lambda d: reg_of(d, "device_type")["fields"][0].update({"count": 4})),
+
+        # ---- A4: which device this is
+        ("reject", "no device section", lambda d: d.pop("device")),
+        ("reject", "a device with no vendor", lambda d: d["device"].pop("vendor")),
+        ("reject", "a device with no model", lambda d: d["device"].pop("model")),
+        ("reject", "a firmware range with no lower bound",
+         lambda d: d["device"].update({"firmware_version": {"to": "2.0"}})),
+        ("reject", "a firmware version that is not major.minor",
+         lambda d: d["device"].update({"firmware_version": {"from": "v1"}})),
+        ("accept", "a closed firmware range",
+         lambda d: d["device"].update({"firmware_version": {"from": "1.0", "to": "1.4"}})),
+
+        # ---- identification
+        ("reject", "a probe with no expectation at all",
+         lambda d: d["identification"]["registers"].append({"space": "holding", "address": 4})),
+        ("reject", "a probe expecting two different things",
+         lambda d: d["identification"]["registers"].append(
+             {"space": "holding", "address": 4, "equals": 1, "in": [1, 2]})),
+        ("reject", "an identification that identifies nothing", lambda d: d["identification"].clear()),
+        ("reject", "an unknown device-id object",
+         lambda d: d["identification"]["report_device_id"].update({"serial_number": "x"})),
+        ("accept", "a probe matching a family of product ids",
+         lambda d: d["identification"]["registers"].append(
+             {"space": "holding", "address": 7, "in": [4010, 4011, 4012]})),
     ])
 
     print()

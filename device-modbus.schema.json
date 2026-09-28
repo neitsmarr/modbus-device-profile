@@ -2,13 +2,256 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/modbus-device-profile/device-modbus.schema.json",
   "title": "Modbus register map",
-  "description": "The Modbus interface of one device: transport limits and the register map. A register is an entity here rather than an attribute of a property, which is what lets one register carry several properties as bits, one property span several registers, and a range be reserved carrying nothing at all -- none of which a per-property binding could express (D15). Properties are referenced by name from the properties document.",
+  "description": "The Modbus interface of one device: which device it is, how its addresses are numbered, how a client recognises it on the bus, what the transport tolerates, and the register map itself. A register is an entity here rather than an attribute of a property, which is what lets one register carry several properties as bits, one property span several registers, and a range be reserved carrying nothing at all -- none of which a per-property binding could express (D15). Intended to describe any Modbus device, third-party as well as our own: everything a client needs in order to talk to it is here, and properties are referenced by name from a semantic document that a third-party device may not have.",
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "device",
+    "addressing",
     "registers"
   ],
   "properties": {
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which device this register map belongs to. Required: a map is useless to a client that cannot tell what it is a map of, and a repository holding many devices across many firmware versions needs each file to say which one it is (D14). Vendor and model identify the product; everything else is optional.",
+      "required": [
+        "vendor",
+        "model"
+      ],
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who makes the device. Named explicitly because this format describes third-party products too."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The product, as its datasheet names it. The same thing the semantic document calls 'name', where one exists."
+        },
+        "description": {
+          "type": "string",
+          "description": "One line on what the device is."
+        },
+        "type": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The vendor's own numeric product id, where it has one, as read from the device itself. Often the most discriminating thing identification can match on."
+        },
+        "firmware_version": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Which firmware versions this map is valid for. A range rather than one version, because a register map normally outlives several releases; omitting 'to' means this version and later.",
+          "required": [
+            "from"
+          ],
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9]\\d{0,2})\\.(?:0|[1-9]\\d{0,2})(?:\\.(?:0|[1-9]\\d{0,2}))?$"
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9]\\d{0,2})\\.(?:0|[1-9]\\d{0,2})(?:\\.(?:0|[1-9]\\d{0,2}))?$"
+            }
+          }
+        }
+      }
+    },
+    "addressing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What the 'address' numbers in this file count from. Required, and the single most consequential fact in the document: an off-by-one here is wrong in the documentation, the commissioning tool and the firmware at once, with no diff to show it. Modbus itself numbers the wire offset from 0 while nearly every datasheet prints register numbers from 1, so neither convention can be assumed.",
+      "required": [
+        "base"
+      ],
+      "properties": {
+        "base": {
+          "enum": [
+            "pdu",
+            "data_model"
+          ],
+          "description": "'pdu' means an address IS the offset that travels in the request, counted from 0. 'data_model' means an address is the register number a datasheet prints, counted from 1, and the wire offset is address - 1. Legacy 4xxxx / 3xxxx numbering is data_model with the space prefix dropped: holding register 40001 is address 1 in the holding space."
+        },
+        "base_overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "For the devices whose datasheet numbers one space differently from another. Rare, and worth stating rather than silently renumbering a transcribed map.",
+          "properties": {
+            "holding": {
+              "enum": [
+                "pdu",
+                "data_model"
+              ]
+            },
+            "input": {
+              "enum": [
+                "pdu",
+                "data_model"
+              ]
+            },
+            "coil": {
+              "enum": [
+                "pdu",
+                "data_model"
+              ]
+            },
+            "discrete": {
+              "enum": [
+                "pdu",
+                "data_model"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "identification": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "How a client decides that the device answering at some address is this device, and so that this profile applies. A bus scan finds an address, not a product: without this, choosing a profile is left to whoever is holding the laptop. Every rule given must hold, so a profile matching nothing is safer than one matching the wrong device.",
+      "properties": {
+        "registers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "One read whose result must match for this profile to apply. Reads only: probing an unidentified device must never change it. A read that fails -- an exception, a timeout, a short frame -- is a mismatch and not an error, because the device being probed may be a different product entirely.",
+            "required": [
+              "space",
+              "address"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "equals"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "in"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "range"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "in"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "equals"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "range"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "range"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "equals"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "in"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "space": {
+                "$ref": "#/$defs/space"
+              },
+              "address": {
+                "$ref": "#/$defs/address"
+              },
+              "mask": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535,
+                "description": "Applied to the raw value before comparing, for a register that packs a product id beside something volatile -- a version byte beside a build counter, say."
+              },
+              "equals": {
+                "type": "integer",
+                "description": "The raw register value, before any scale or enum mapping. Raw because a decode would presume the very profile being tested."
+              },
+              "in": {
+                "type": "array",
+                "minItems": 2,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Any of these raw values matches. For a product id shared by a family of models this map covers."
+              },
+              "range": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "integer"
+                },
+                "description": "An inclusive [low, high] band of raw values, for matching a firmware version range."
+              }
+            }
+          },
+          "description": "Register reads that must all match, cheapest and most discriminating first. A client may stop at the first mismatch."
+        },
+        "report_device_id": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "Expected objects from Report Server ID / Read Device Identification (FC 43, MEI type 14), for the devices that implement it. The standard way to ask a Modbus device what it is, and the only one that needs no prior knowledge of its map -- so it is worth stating where available, even though FC 43 is optional and many devices omit it. Strings are compared exactly, after trimming surrounding whitespace.",
+          "properties": {
+            "vendor_name": {
+              "type": "string",
+              "description": "Object 0x00."
+            },
+            "product_code": {
+              "type": "string",
+              "description": "Object 0x01."
+            },
+            "major_minor_revision": {
+              "type": "string",
+              "description": "Object 0x02."
+            },
+            "product_name": {
+              "type": "string",
+              "description": "Object 0x04."
+            },
+            "model_name": {
+              "type": "string",
+              "description": "Object 0x05."
+            }
+          }
+        }
+      }
+    },
     "limits": {
       "type": "object",
       "additionalProperties": false,
@@ -82,7 +325,8 @@
     "address": {
       "type": "integer",
       "minimum": 0,
-      "maximum": 65535
+      "maximum": 65536,
+      "description": "Counted as addressing.base says. The exact bounds follow from the base -- 0..65535 for 'pdu', 1..65536 for 'data_model' -- and validate.py enforces them, since a schema cannot see a sibling section."
     },
     "register": {
       "type": "object",
@@ -175,17 +419,120 @@
               "title"
             ]
           }
+        },
+        {
+          "description": "A coil or a discrete input IS one bit, and its address selects it. So such a register carries exactly one field, that field's encoding is 'bit', and there is no bit position to give -- the address already was one. A clear_label means nothing either: there is no set of bits to be collectively clear.",
+          "if": {
+            "required": [
+              "space"
+            ],
+            "properties": {
+              "space": {
+                "enum": [
+                  "coil",
+                  "discrete"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "clear_label"
+              ]
+            },
+            "properties": {
+              "fields": {
+                "maxItems": 1,
+                "items": {
+                  "required": [
+                    "encoding"
+                  ],
+                  "properties": {
+                    "encoding": {
+                      "const": "bit"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "Conversely, 'bit' is not an encoding a 16-bit register can have: which bit would it be? A bool packed into a holding or input register is a field with a 'bit' position instead.",
+          "if": {
+            "required": [
+              "space"
+            ],
+            "properties": {
+              "space": {
+                "enum": [
+                  "holding",
+                  "input"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "items": {
+                  "properties": {
+                    "encoding": {
+                      "not": {
+                        "const": "bit"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "A count is an element count, so it belongs to an encoding that has elements. Only 'chars' does.",
+          "if": {
+            "required": [
+              "fields"
+            ],
+            "properties": {
+              "fields": {
+                "contains": {
+                  "required": [
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "items": {
+                  "if": {
+                    "required": [
+                      "count"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "encoding": {
+                        "const": "chars"
+                      }
+                    },
+                    "required": [
+                      "encoding"
+                    ]
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "properties": {
         "space": {
-          "enum": [
-            "holding",
-            "input",
-            "coil",
-            "discrete"
-          ],
-          "description": "Which Modbus address space. These are independent ranges: the same number in two spaces is two different registers."
+          "$ref": "#/$defs/space"
         },
         "address": {
           "$ref": "#/$defs/address"
@@ -300,6 +647,15 @@
           "description": "Overrides limits.word_order for this field."
         }
       }
+    },
+    "space": {
+      "enum": [
+        "holding",
+        "input",
+        "coil",
+        "discrete"
+      ],
+      "description": "Which Modbus address space. These are independent ranges: the same number in two spaces is two different registers."
     }
   }
 }

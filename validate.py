@@ -299,6 +299,90 @@ def check_reread_dependents(doc, index, rep: Report) -> None:
 
 
 # ------------------------------------------------------------------ layer 3
+def base_of(modbus_doc, space: str) -> str:
+    """Which numbering `space` uses: the document's base, unless overridden."""
+    addressing = modbus_doc.get("addressing") or {}
+    return (addressing.get("base_overrides") or {}).get(space, addressing.get("base"))
+
+
+def check_addressing(modbus_doc, rep: Report) -> None:
+    """A1/A2: what the declared base implies, which a schema cannot see.
+
+    The bounds of a legal address depend on a sibling section, and so does the
+    wire offset every consumer computes -- so both live here rather than in the
+    schema. A2's coil and discrete rules are in the schema, since they are
+    local to one register; what is left for this layer is the address itself.
+    """
+    LIMITS = {"pdu": (0, 65535), "data_model": (1, 65536)}
+    for i, reg in enumerate(modbus_doc.get("registers") or []):
+        space = reg.get("space")
+        base = base_of(modbus_doc, space)
+        if base not in LIMITS:
+            continue
+        lo, hi = LIMITS[base]
+        for key in ("address", "from", "to"):
+            if key not in reg:
+                continue
+            addr = reg[key]
+            if not lo <= addr <= hi:
+                rep.error(f"registers/{i}/{key}: {addr} is outside {lo}..{hi}, the legal range "
+                          f"for a '{base}' address")
+        if "from" in reg and "to" in reg and reg["to"] < reg["from"]:
+            rep.error(f"registers/{i}: reserved range ends ({reg['to']}) before it starts "
+                      f"({reg['from']})")
+
+
+def check_identification(modbus_doc, rep: Report) -> None:
+    """Detection has to be possible, unambiguous, and read-only.
+
+    A probe that names an address the map does not describe is not an error --
+    a device id register may deliberately sit outside the documented map -- but
+    it is worth saying out loud, because the usual cause is a typo.
+    """
+    ident = modbus_doc.get("identification")
+    if not ident:
+        rep.warn("identification: absent -- a bus scan finds an address, not a product, so nothing "
+                 "here says how a client should recognise this device")
+        return
+
+    occupied: dict[tuple[str, int], int] = {}
+    for i, reg in enumerate(modbus_doc.get("registers") or []):
+        if "address" in reg:
+            occupied[(reg["space"], reg["address"])] = i
+
+    seen: set[tuple[str, int]] = set()
+    for i, probe in enumerate(ident.get("registers") or []):
+        where = f"identification/registers/{i}"
+        space, addr = probe.get("space"), probe.get("address")
+        if (space, addr) in seen:
+            rep.error(f"{where}: {space} {addr} is probed twice; two rules on one register either "
+                      f"agree and one is noise, or disagree and nothing can match")
+        seen.add((space, addr))
+
+        if (space, addr) not in occupied:
+            rep.warn(f"{where}: {space} {addr} is not a register this map describes")
+        if space in ("coil", "discrete"):
+            rep.error(f"{where}: {space} {addr} yields one bit, which cannot discriminate between "
+                      f"products -- probe a register that carries an identifier")
+
+        mask = probe.get("mask")
+        rng = probe.get("range")
+        values = ([probe["equals"]] if "equals" in probe else
+                  list(probe.get("in") or []) + (list(rng) if rng else []))
+        for v in values:
+            if not 0 <= v <= 65535:
+                rep.error(f"{where}: {v} is not a value a single register can hold")
+            if mask is not None and v & ~mask & 0xFFFF:
+                rep.error(f"{where}: expected value {v:#06x} has bits set outside mask "
+                          f"{mask:#06x}, so no reading can ever match")
+        if rng and rng[0] > rng[1]:
+            rep.error(f"{where}: range [{rng[0]}, {rng[1]}] is empty")
+
+    if not ident.get("registers") and not ident.get("report_device_id"):
+        rep.error("identification: neither a register probe nor a device-id expectation, so it "
+                  "identifies nothing")
+
+
 def check_agreement(props_doc, modbus_doc, rep: Report):
     """The two documents have to agree. Returns (encoding per property, on-bus set)."""
     props = props_doc.get("properties") or {}
@@ -445,6 +529,8 @@ def main(argv: list[str]) -> int:
     check_schema(props_doc, PROPS_SCHEMA, props_path.name, rep)
     check_schema(modbus_doc, MODBUS_SCHEMA, modbus_path.name, rep)
     check_references(props_doc, rep)
+    check_addressing(modbus_doc, rep)
+    check_identification(modbus_doc, rep)
     encodings, _ = check_agreement(props_doc, modbus_doc, rep)
     check_storage(props_doc, encodings, rep)
     index = reverse_index(props_doc)

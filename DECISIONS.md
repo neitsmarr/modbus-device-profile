@@ -973,3 +973,126 @@ model buys -- not much for this device, and precisely the conjunction that D3
 will have to define.
 
 The generated file is a derived artifact and is gitignored, per D1.
+
+## D17 — The protocol document stands on its own: identity, addressing base, and how to recognise the device
+
+**The complaint that drove it.** The register map should describe the access API
+of *any* Modbus device, ours or a third party's. Measured against that, three
+things were missing, and one of them was a defect rather than an omission.
+
+**Rule 1 — the addressing base is declared, and required.**
+
+    addressing:
+      base: data_model        # or: pdu
+
+`data_model` means an address is the register number a datasheet prints,
+counted from 1, and the wire offset is `address - 1`. `pdu` means the address
+*is* the offset, counted from 0. Legacy 4xxxx/3xxxx numbering is `data_model`
+with the space prefix dropped, since the space is already a separate key.
+`base_overrides` handles the device that numbers one space differently from
+another.
+
+**Why it cannot be a convention.** The file said `address: 1`, the schema
+permitted `address: 0`, and `generate_library_json.py` mapped
+`address -> "number"` 1:1 — which silently commits to `data_model` while the
+schema's lower bound assumes `pdu`. A probe confirmed a register at address 0
+passed the schema and all three validator layers. This is the one off-by-one
+that lands in the documentation, the commissioning tool and the firmware
+simultaneously, with no diff anywhere to show it, and it is the one thing a
+third-party map is most likely to get wrong in transcription. Nothing about it
+is derivable, so it is required rather than defaulted: a default would be the
+convention again, just spelled differently.
+
+The exact bounds follow from the base — 0..65535 for `pdu`, 1..65536 for
+`data_model` — and live in `validate.py`, because a JSON Schema cannot see a
+sibling section.
+
+**Rule 2 — a coil is a single bit, and the schema now knows it.**
+
+A `coil` or `discrete` register carries exactly one field, that field's
+encoding is `bit`, and there is no `bit:` position to give: the address already
+was one. `clear_label` is meaningless there too — there is no set of bits to be
+collectively clear. Conversely `encoding: bit` is now rejected in `holding` and
+`input`, where it never said which bit.
+
+**Why this was worth the rules.** All three of these were accepted by the
+schema *and* by the validator: a coil carrying `uint16`, a coil field with
+`bit: 3`, a discrete input carrying `float32`. Both spaces were declared
+vocabulary with zero uses and zero checks, so the format promised
+bit-oriented spaces while accepting physically impossible maps in them. Two
+uses are one too few to leave unchecked: the AHU has none, and the first
+third-party device with a coil would have written nonsense that validated.
+
+**Rule 3 — the document says which device it describes.**
+
+    device:
+      vendor: "3S"
+      model: "AHU-1"
+      type: 4010
+      firmware_version:
+        from: "1.0"
+
+Before this, the protocol document's top-level keys were exactly
+`['limits', 'registers']`: an anonymous list of addresses. `vendor` and `model`
+are required — `vendor` explicitly, because this format is meant to describe
+other people's products, where "the device" is not obvious from the
+repository. The firmware bound is a *range* rather than a version, since a
+register map normally outlives several releases; omitting `to` means "and
+later". D14 measured churn across firmware versions of one device and D15 split
+the documents partly so a second interface could be added later — both make
+this binding load-bearing, and it was absent from both.
+
+**Rule 4 — identification is part of the protocol, because a bus scan finds an
+address, not a product.**
+
+    identification:
+      registers:
+        - { space: holding, address: 4, equals: 4010 }
+        - { space: holding, address: 6, mask: 0xFF00, equals: 0x0100 }
+      report_device_id:
+        vendor_name: "3S"
+        product_code: "AHU-1"
+
+Four properties this shape was chosen for:
+
+- **Read-only.** Probing an unidentified device must never change it. Only
+  reads are expressible; there is no write probe and no unlock step.
+- **A failed read is a mismatch, not an error.** The thing being probed may be
+  another vendor's product, where the address is reserved, absent, or answers
+  exception 02. Treating that as a fault would make detection unusable on
+  exactly the bus it exists for.
+- **Raw values, never decoded ones.** A scale or an enum mapping presumes the
+  profile being tested, so comparing decoded values would beg the question.
+  `mask` covers the register that packs a product id beside something volatile.
+- **Conjunction, cheapest rule first.** Every rule must hold, so a profile
+  matching nothing is safer than one matching the wrong device, and a client
+  may stop at the first mismatch.
+
+`report_device_id` carries the expected objects from Read Device Identification
+(FC 43, MEI type 14). It is the only identification that needs no prior
+knowledge of a device's map, which makes it the right first probe where a
+device implements it — and FC 43 is optional in Modbus, which is why register
+probes exist alongside it rather than instead of it.
+
+`validate.py` checks what the shape cannot: no register probed twice (two
+rules on one register either agree, and one is noise, or disagree, and nothing
+matches), no expected value with bits outside its own mask, no empty range, and
+no probe on a coil or discrete input, since one bit cannot discriminate between
+products. A probe naming an address outside the documented map is a warning
+rather than an error — a device id register may legitimately sit outside it,
+but the usual cause is a typo. A document with no `identification` at all is a
+warning too.
+
+**Cost.** Three formerly optional sections are now required, so every existing
+map needs a header before it validates — acceptable at two documents, and the
+reason to do it now rather than at twenty. `identification` is the first
+vocabulary here aimed at a consumer's *behaviour* rather than at the device's
+facts, which sits slightly uneasily beside D16's rule that the map carries only
+what cannot be derived; it earns its place because nothing else in either
+document answers "is this that device?", and that question has to be answered
+before any other fact in the file can be trusted.
+
+**Left open.** Whether two profiles' identification rules are mutually
+exclusive is checkable, and cannot be checked from inside one document — it
+needs a library of them. That is the right check to add when there is a
+directory of profiles rather than one.

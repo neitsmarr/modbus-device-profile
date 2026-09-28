@@ -9,6 +9,9 @@ against the two documents, the validator, the generator, or a mutation probe
 that was actually run. Findings are split by who can close them — a format
 defect I can fix, or a firmware fact only the device author knows.
 
+**Status.** A1, A2 and A4 are closed by D17, which also added `identification:`
+for device detection. A3, A5, A6, A7 and all of section B are still open.
+
 Evidence is from the AHU map (209 registers) and from a second real device,
 `DSCDG3-4` (a duct sensor, 33 input + 43 holding registers), whose
 commissioning-tool profile predates all of this.
@@ -39,6 +42,8 @@ claimed rather than demonstrated.
 
 ### A1. The addressing base is never stated, and it is the one off-by-one that matters
 
+**CLOSED by D17.**
+
 `address: 1` does not say whether it is a 1-based data-model register number
 (what a datasheet prints, what `DSCDG3-4`'s profile calls `"number": 1`) or a
 0-based PDU offset (what goes on the wire). `generate_library_json.py` maps
@@ -57,6 +62,8 @@ change away from being wrong everywhere at once, with no diff to show it.
 `minimum` that follows from it.
 
 ### A2. A coil is a single bit, and the schema does not know that
+
+**CLOSED by D17.**
 
 Probes, all **accepted** by schema and validator together:
 
@@ -96,6 +103,8 @@ checker stood in for a single source; here, a fact is stored once and never
 used at all.
 
 ### A4. The protocol document does not say which device it describes
+
+**CLOSED by D17.**
 
 `device-properties.yaml` opens with `device:` — name, description, type 4010,
 firmware_version 1.0. `device-modbus.yaml` opens with `limits:`. Its top-level
