@@ -65,6 +65,12 @@ def numerical(sig):
 
 def decoder_for(space, reg, fields, props, unsupported):
     """A library decoder for one register."""
+    if reg.get("registers", 1) > 1:
+        # The library gives one entry per address, so a value assembled from
+        # several registers has nowhere to live in it (D23).
+        unsupported.append(f"{space} {reg['address']}: spans {reg['registers']} registers, and "
+                           f"the library format describes one address per entry")
+        return {"type": "numerical", "multiplier": 1}
     if any("bits" in f for f in fields):
         # The library's bitwise decoder labels individual bits and nothing else,
         # so a register packing an enum or an integer into part of itself has no

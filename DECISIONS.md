@@ -1612,3 +1612,98 @@ rules were in before D20, and the same caution applies: the first real
 multi-value register, ours or a third party's, is what will confirm the shape.
 Signed sub-fields are unhandled: a span reads out unsigned, and two's complement
 inside a span is not expressible until something needs it.
+
+## D23 — Data is described in two steps: the entry's width, then a bit cut with a codec
+
+**Rule.** A register entry declares how many addresses it occupies; the fields
+inside it cut up the assembled raw value with a bit span and a codec.
+
+    - address: 100
+      title: "Energy Total"
+      access: read_only
+      registers: 2
+      word_order: big
+      fields:
+        - id: energy_total
+          bits: [0, 31]
+          codec: uint
+          type: int
+          unit: "kWh"
+          scale: 0.1
+
+`registers` is step one and lives on the **register**, because occupying
+addresses is the register's business. `encoding: uint32` on a field used to widen
+its register implicitly, which was the field reaching into what the register
+owns. `bits` and `codec` are step two.
+
+**The observation that made this easy: the old model was already a shorthand over
+this one.** `encoding: uint16` *is* one register, bits 0..15, codec uint.
+`bits: [1, 4]` *is* one register, bits 1..4, codec uint. So this is the general
+form rather than a replacement, and it collapses a three-way `oneOf` into one
+mechanism — which is why **no existing field had to change**. The 190 plain
+16-bit fields still read `encoding: uint16`.
+
+**Bit positions are counted from the LSB of the assembled value**, not from a
+position on the wire. That requires knowing how the words concatenate, so
+`word_order` moved from the field to the register and is **required** wherever
+`registers` exceeds 1: Modbus fixes the byte order inside a register and says
+nothing about the order between them, so there is no safe default. Counting from
+the assembled value rather than the wire means a field's `bits` mean the same
+thing whichever convention a device uses — the bit numbers are the ones firmware
+would use.
+
+**What this makes expressible that was not:**
+
+- a bit span inside a 32-bit value; spans were capped at one register
+- a value **straddling** the boundary between two addresses — `bits: [12, 19]`
+  of a two-register entry
+- several values sharing a wide entry, such as two 12-bit values in 24 bits
+- a **signed** sub-field, via `codec: int`. This was a gap D22 left open
+  explicitly: a span read out unsigned and two's complement was inexpressible
+- a string whose length is **arithmetic**: `bits: [0, 159]` with `codec: ascii`
+  is 20 characters at 8 bits each, and nothing has to be told so
+
+That last one closes both halves of `OPEN-QUESTIONS.md` Q1. Span width was
+implicit in an encoding name; it is now stated. Character density was an
+assumption in `validate.py` -- `SPAN["chars"] = 1`, one character per register,
+wasting the high byte, while the DSCDG3-4's own registers pack two -- and it is
+now a property of the codec, so `count` and the guesswork both go.
+
+**Codecs are not all arbitrary spans, which is the cost of the generality.**
+`float32` and `float64` are IEEE 754: each needs its exact width *and* 16-bit
+alignment, so `float32` at bits 8..39 is now representable and wrong, and the
+validator rejects it. `ascii` needs a multiple of 8. The codec vocabulary is
+deliberately five entries -- `uint`, `int`, `float32`, `float64`, `ascii` -- being
+the five that appear in real maps; BCD is the obvious sixth and is a one-line
+addition when a device needs it.
+
+**New checks, all probed firing:** a span past the end of its entry; a float at
+the wrong width or off a register boundary; ascii on a fractional character;
+`max_length` disagreeing with what the span holds; a codec that cannot carry the
+declared type; and the shorthand disagreeing with the declared width, so
+`encoding: uint16` inside `registers: 2` is an error rather than a silent
+mismatch. Capacity checking is now signedness-aware: eight bits hold -128..127
+under `codec: int` and 0..255 under `uint`, and a range is checked against the
+right one.
+
+**What it still does not cover, asked directly.** Three things, and it is worth
+being plain that this is not universal:
+
+- a value whose halves are **not adjacent** -- high word at holding 100, low at
+  holding 200. Step one is a contiguous run, so this stays Q1's gap.
+- read and write meaning different things at one address (Q6), which is
+  orthogonal.
+- a value that is **computed** rather than extracted -- a checksum, or a quantity
+  derived from distant registers by a formula. Deliberately out of scope rather
+  than overlooked.
+
+It also does not apply to coils and discrete inputs, which have no register width
+to declare; they keep the shape D20 gave them.
+
+**Not yet exercised by the map.** The AHU has no value wider than one register, so
+this vocabulary is checked by schema tests and validator probes rather than by the
+document -- the same caveat as D22's bit spans, and the same answer: the first
+real wide value, ours or a third party's, is what will confirm the bit-numbering
+convention against a datasheet. A multi-register entry also cannot be converted to
+the 3SModbus format, which describes one address per entry, so the generator
+reports it rather than emitting something plausible and wrong.

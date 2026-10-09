@@ -76,6 +76,25 @@ WIDTH_CAPACITY = {
 SPAN = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2,
         "uint64": 4, "int64": 4, "float64": 4, "chars": 1}
 
+# What each `encoding` shorthand means in D23's terms: (registers, codec). The
+# bit span is the whole of those registers, so it follows from the count.
+ENCODING_SUGAR = {
+    "uint16": (1, "uint"), "int16": (1, "int"),
+    "uint32": (2, "uint"), "int32": (2, "int"), "float32": (2, "float32"),
+    "uint64": (4, "uint"), "int64": (4, "int"), "float64": (4, "float64"),
+    "chars": (None, "ascii"),      # the register count says how long
+}
+# Which codec can carry which semantic type.
+CODECS_FOR = {
+    "bool":  {"uint", "int"},
+    "int":   {"uint", "int"},
+    "real":  {"uint", "int", "float32", "float64"},
+    "enum":  {"uint"},
+    "text":  {"ascii"},
+}
+# A codec that is not an arbitrary span: exact width, aligned to a word.
+FIXED_WIDTH_CODECS = {"float32": 32, "float64": 64}
+
 
 class Report:
     def __init__(self) -> None:
@@ -341,17 +360,37 @@ def iter_registers(modbus_doc):
             yield space, reg, f"spaces/{space}/registers/{i}"
 
 
-def bit_span(field):
-    """The inclusive bit range a field occupies, or None if it is not packed.
+def register_width(reg) -> int:
+    """How many addresses a register entry occupies. Absent means one (D23)."""
+    return reg.get("registers", 1)
 
-    `bit: n` is shorthand for `bits: [n, n]` (D22), so every check works in spans
-    and the single-bit case needs no special path.
+
+def resolve_field(reg, field):
+    """What a field actually occupies, as (low bit, high bit, codec).
+
+    D23 describes data in two steps -- the entry's width, then a bit cut with a
+    codec inside it -- and `bit: n` and `encoding: uint16` are shorthands over
+    that. Expanding them here means every check downstream sees one form.
+    Returns None for a coil, whose address IS the bit.
     """
     if "bits" in field:
         lo, hi = field["bits"]
-        return (lo, hi)
+        return (lo, hi, field.get("codec"))
     if "bit" in field:
-        return (field["bit"], field["bit"])
+        return (field["bit"], field["bit"], "uint")
+    enc = field.get("encoding")
+    if enc in ENCODING_SUGAR:
+        regs, codec = ENCODING_SUGAR[enc]
+        width = 16 * (register_width(reg) if regs is None else regs)
+        return (0, width - 1, codec)
+    return None
+
+
+def bit_span(field, reg=None):
+    """Back-compatible span accessor: the bits a PACKED field occupies."""
+    if "bits" in field or "bit" in field:
+        lo, hi, _ = resolve_field(reg or {}, field)
+        return (lo, hi)
     return None
 
 
@@ -576,86 +615,114 @@ def check_layout(doc, fields, rep: Report) -> None:
 
         addr = reg.get("address")
         regfields = fields_of(reg)
-        if any(("bit" in f or "bits" in f) for f in regfields):
-            claim(space, addr, f"packed bits ({at})", at, "packed")
+        width = register_width(reg)
+        capacity = 16 * width
+
+        # The entry occupies its whole declared width, whatever the fields inside
+        # it cut up. That is step one of D23, and it is the register's business.
+        for a in range(addr, addr + width):
+            claim(space, a, f"the entry at {at}", at, "whole" if width > 1 else "packed")
+
+        if width > 1 and "word_order" not in reg:
+            rep.error(f"{at}: spans {width} registers but does not say which end the first "
+                      f"address holds, so its bit positions mean nothing")
 
         for fi, field in enumerate(regfields):
             fat = f"{at}/fields/{fi}"
             name = field.get("id")
             ftype = field.get("type")
+            resolved = resolve_field(reg, field)
 
-            span = bit_span(field)
-            if span:
-                lo, hi = span
-                if hi < lo:
-                    rep.error(f"{fat}: bit span [{lo}, {hi}] runs backwards")
-                    continue
-                for b in range(lo, hi + 1):
-                    key = (space, addr, b)
-                    if key in bits:
-                        rep.error(f"{fat}: bit {b} of {space} {addr} is already taken by "
-                                  f"{bits[key]}")
-                    bits[key] = fat
-                width = hi - lo + 1
-                if width == 1 and ftype != "bool":
-                    rep.error(f"{fat}: '{name}' is type '{ftype}', but only a bool can be "
-                              f"carried as a single bit")
-                elif width > 1 and ftype == "bool":
-                    rep.error(f"{fat}: '{name}' is a bool spread over {width} bits; a bool "
-                              f"occupies one, and a wider span wants an int or an enum")
-                cap = (1 << width) - 1
-                if ftype == "enum":
-                    top = max((int(v) for v in (field.get("enum") or {})), default=0)
-                    if top > cap:
-                        rep.error(f"{fat}: enum value {top} does not fit {width} bit(s), which "
-                                  f"hold 0..{cap}")
-                rs = raw_span(field)
-                if rs and (rs[0] < -0.5 or rs[1] > cap + 0.5):
-                    rep.error(f"{fat}: range {field['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
-                              f"after scale, which does not fit {width} bit(s) (0..{cap})")
-                continue
-
-            enc = field.get("encoding")
-            if enc is None:          # a coil: the address is the bit
+            if resolved is None:            # a coil: its address IS the bit
                 if ftype != "bool":
                     rep.error(f"{fat}: '{name}' is type '{ftype}', but a {space} carries one bit")
-                claim(space, addr, f"'{name}' ({fat})", fat, "whole")
                 continue
 
-            span = SPAN.get(enc, 1) * field.get("count", 1)
-            for a in range(addr, addr + span):
-                claim(space, a, f"'{name}' ({fat})", fat, "whole")
+            lo, hi, codec = resolved
+            if hi < lo:
+                rep.error(f"{fat}: bit span [{lo}, {hi}] runs backwards")
+                continue
+            if hi >= capacity:
+                rep.error(f"{fat}: bit {hi} is outside an entry of {width} register(s), which "
+                          f"holds bits 0..{capacity - 1} -- widen `registers` or narrow the span")
+                continue
 
-            if ftype and enc not in ENCODINGS_FOR.get(ftype, set()):
-                rep.error(f"{fat}: type '{ftype}' cannot be carried as '{enc}' "
-                          f"(allowed: {', '.join(sorted(ENCODINGS_FOR[ftype]))})")
-            elif ftype == "real" and enc not in ("float32", "float64") and "scale" not in field:
-                rep.error(f"{fat}: a real carried as '{enc}' needs a scale, or its "
-                          f"fractional part is unrepresentable")
-            if ftype == "text" and "max_length" not in field:
-                rep.error(f"{fat}: type 'text' needs max_length")
+            for b in range(lo, hi + 1):
+                key = (space, addr, b)
+                if key in bits:
+                    rep.error(f"{fat}: bit {b} of {space} {addr} is already taken by {bits[key]}")
+                bits[key] = fat
 
-            rs = raw_span(field)
-            if rs and enc in WIDTH_CAPACITY:
-                c = WIDTH_CAPACITY[enc]
-                if rs[0] < c[0] - 0.5 or rs[1] > c[1] + 0.5:
+            span_width = hi - lo + 1
+
+            # Step two: the codec has to suit the type, and some codecs are not
+            # arbitrary spans.
+            if codec and ftype and codec not in CODECS_FOR.get(ftype, set()):
+                rep.error(f"{fat}: type '{ftype}' cannot be read by codec '{codec}' "
+                          f"(allowed: {', '.join(sorted(CODECS_FOR[ftype]))})")
+            if codec in FIXED_WIDTH_CODECS:
+                want = FIXED_WIDTH_CODECS[codec]
+                if span_width != want:
+                    rep.error(f"{fat}: codec '{codec}' is IEEE 754 and occupies exactly {want} "
+                              f"bits, not {span_width}")
+                elif lo % 16:
+                    rep.error(f"{fat}: codec '{codec}' has to start on a register boundary, "
+                              f"not at bit {lo}")
+            if codec == "ascii":
+                if span_width % 8:
+                    rep.error(f"{fat}: codec 'ascii' reads 8 bits per character, so a span of "
+                              f"{span_width} bits is a fraction of one")
+                elif "max_length" in field and field["max_length"] != span_width // 8:
+                    rep.error(f"{fat}: {span_width} bits hold {span_width // 8} characters, "
+                              f"but max_length says {field['max_length']}")
+            if ftype == "text" and codec != "ascii":
+                rep.error(f"{fat}: type 'text' needs a character codec, not '{codec}'")
+            if ftype == "real" and codec in ("uint", "int") and "scale" not in field:
+                rep.error(f"{fat}: a real read as an integer needs a scale, or its fractional "
+                          f"part is unrepresentable")
+            if span_width == 1 and ftype != "bool":
+                rep.error(f"{fat}: '{name}' is type '{ftype}', but one bit can only carry a bool")
+            elif span_width > 1 and ftype == "bool" and "encoding" not in field:
+                rep.error(f"{fat}: '{name}' is a bool spread over {span_width} bits; a bool "
+                          f"occupies one, and a wider span wants an int or an enum")
+
+            # Capacity: what the span can actually hold, signed or not.
+            if codec == "int":
+                cap_lo, cap_hi = -(1 << (span_width - 1)), (1 << (span_width - 1)) - 1
+            else:
+                cap_lo, cap_hi = 0, (1 << span_width) - 1
+            if codec in ("uint", "int"):
+                if ftype == "enum":
+                    top = max((int(v) for v in (field.get("enum") or {})), default=0)
+                    if top > cap_hi:
+                        rep.error(f"{fat}: enum value {top} does not fit {span_width} bit(s), "
+                                  f"which hold {cap_lo}..{cap_hi}")
+                rs = raw_span(field)
+                if rs and (rs[0] < cap_lo - 0.5 or rs[1] > cap_hi + 0.5):
                     rep.error(f"{fat}: range {field['range']} is raw {rs[0]:.0f}..{rs[1]:.0f} "
-                              f"after scale, which does not fit '{enc}' ({c[0]}..{c[1]})")
-            if ftype == "enum" and enc in WIDTH_CAPACITY:
-                top = max((int(v) for v in (field.get("enum") or {})), default=0)
-                if top > WIDTH_CAPACITY[enc][1]:
-                    rep.error(f"{fat}: enum value {top} does not fit '{enc}'")
+                              f"after scale, which does not fit {span_width} bit(s) "
+                              f"({cap_lo}..{cap_hi})")
 
-        # A register whose fields are spans rather than whole values is a packed
-        # settings word; a gap in one is usually an omission rather than a spare.
-        spans = [bit_span(f) for f in regfields if bit_span(f)]
-        if spans:
+            # The shorthand must agree with the width the register declares.
+            enc = field.get("encoding")
+            if enc in ENCODING_SUGAR:
+                regs, _ = ENCODING_SUGAR[enc]
+                if regs is not None and regs != width:
+                    rep.error(f"{fat}: encoding '{enc}' is {regs} register(s) wide, but the entry "
+                              f"declares {width}")
+
+        # A gap below the highest field of a packed entry is usually an omission
+        # rather than a spare -- but only where the fields really are a cut-up,
+        # not a single whole value written in shorthand.
+        spans = [resolve_field(reg, f) for f in regfields]
+        spans = [(lo, hi) for s in spans if s for lo, hi, _c in [s]]
+        if spans and any(hi - lo + 1 not in (capacity,) for lo, hi in spans):
             used = {b for lo, hi in spans for b in range(lo, hi + 1)}
             top = max(hi for _lo, hi in spans)
             gaps = sorted(set(range(0, top + 1)) - used)
-            if gaps and any(hi > lo for lo, hi in spans):
+            if gaps:
                 rep.warn(f"{at}: bits {', '.join(map(str, gaps))} below the highest field are "
-                         f"described by nothing -- a gap in a packed word is usually an omission")
+                         f"described by nothing -- a gap in a packed entry is usually an omission")
 
 
 def check_procedures(doc, fields, rep: Report) -> None:

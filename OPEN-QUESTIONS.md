@@ -54,9 +54,14 @@ Nothing currently exercises any of this: the AHU map has no `chars` field and no
 actually bites integrators — ABCD versus CDAB — and it is unexercised here for
 the same reason as (b).
 
-**Partly answered since:** D22 added `bits: [low, high]`, so several values of
-different widths can share one register. That covers packing *within* a register;
-the questions below are about a value that needs *more* than one.
+**MOSTLY CLOSED by D22 and D23.** D22 added `bits: [low, high]` so several values
+of different widths can share one register. D23 then made the entry's width a
+declared `registers:` count with the bit cut inside it, which settled (a) -- span
+width is stated rather than implied by an encoding name -- and (b) -- character
+density is a property of `codec: ascii`, 8 bits each, rather than a `SPAN` table
+assumption that was wrong. (c) is settled too: `word_order` moved to the register
+and is required above one, and bit positions are counted from the assembled
+value's LSB. What remains open is only the non-adjacent case below.
 
 **What the format cannot express at all:** a value whose halves are not adjacent,
 high word at holding 100 and low word at holding 200. It happens, mostly in

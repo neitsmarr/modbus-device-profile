@@ -512,6 +512,11 @@
                 "required": [
                   "bits"
                 ]
+              },
+              {
+                "required": [
+                  "codec"
+                ]
               }
             ]
           }
@@ -537,7 +542,8 @@
         },
         {
           "required": [
-            "bits"
+            "bits",
+            "codec"
           ],
           "not": {
             "anyOf": [
@@ -572,25 +578,13 @@
             "float64",
             "chars"
           ],
-          "description": "How the value is packed, in a 16-bit space. Required, and deliberately not derived from the property's range even though the narrowest fitting width is correct in 178 of 190 cases here: deriving it would let a range widened in the semantic document silently change the wire format, which is a protocol break with no diff in this file (D16). A width wider than one register makes this register span the following addresses too."
+          "description": "Shorthand for the common whole-value cases, in terms of `registers`, `bits` and `codec`: uint16 and int16 are one register and bits 0..15; uint32, int32 and float32 are two and bits 0..31; uint64, int64 and float64 are four and bits 0..63; chars is ascii over whatever the register count gives. Kept because 190 of the 277 fields here are plain 16-bit values and writing three keys where one did is a bad trade for the common case -- the same proportion argument that kept `bit: n` beside `bits: [n, n]`. validate.py checks the shorthand against the register's declared width, so the two cannot disagree."
         },
         "bit": {
           "type": "integer",
           "minimum": 0,
           "maximum": 15,
           "description": "A single bit position, for a bool packed into this register. Shorthand for `bits: [n, n]`, kept because a lone bit is the overwhelmingly common case and a pair reads worse than the thing it describes. No encoding is given: a bit is a bit."
-        },
-        "count": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Element count for an array or a string. Array length, not register span."
-        },
-        "word_order": {
-          "enum": [
-            "big",
-            "little"
-          ],
-          "description": "Overrides limits.word_order for this field."
         },
         "type": {
           "enum": [
@@ -770,9 +764,19 @@
           "items": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 15
+            "maximum": 1999
           },
-          "description": "An inclusive [low, high] span of bit positions, for a value packed into part of a register alongside others -- a communication settings word carrying a mode flag, a baud rate enum, a parity enum and a timeout in one 16-bit register. The span's width fixes the value's capacity: [5, 6] holds 0..3, so an enum with five members does not fit, and validate.py checks that. The value is read out unsigned, and `enum` keys and `range` bounds are the span's own value, not the whole register's. A span stays inside one register: a value crossing into the next address is a different thing entirely, and the format does not express it."
+          "description": "An inclusive [low, high] span of bit positions within the register entry's raw value, counted from its least significant bit. For a single register that is 0..15; for `registers: 2` it is 0..31, so a value may straddle the boundary between two addresses or share a 32-bit entry with others. The span's width fixes the value's capacity: [5, 6] holds 0..3, so a five-member enum does not fit, and validate.py checks that against both `enum` and `range`. The bound here is merely generous; the real limit is 16 x registers, which a schema cannot see."
+        },
+        "codec": {
+          "enum": [
+            "uint",
+            "int",
+            "float32",
+            "float64",
+            "ascii"
+          ],
+          "description": "How the bits in `bits` become a value. 'uint' and 'int' read the span as a plain or two's complement integer of its own width, so a signed sub-field is expressible where it was not before. 'float32' and 'float64' are IEEE 754 and therefore not arbitrary spans: each needs its exact width and 16-bit alignment, which validate.py checks. 'ascii' reads 8 bits per character, which is what makes a string's length arithmetic rather than an assumption -- `bits: [0, 159]` is 20 characters and nothing has to be told so. Given with `bits`; `encoding` is the shorthand that supplies both."
         }
       },
       "allOf": [
@@ -923,6 +927,31 @@
               }
             }
           }
+        },
+        {
+          "description": "A multi-register value has to say how its words concatenate; a single register has nothing to order.",
+          "if": {
+            "required": [
+              "registers"
+            ],
+            "properties": {
+              "registers": {
+                "minimum": 2
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "word_order"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "word_order"
+              ]
+            }
+          }
         }
       ],
       "properties": {
@@ -972,6 +1001,20 @@
         "hidden": {
           "const": true,
           "description": "Service register: real, documented, not shown to an ordinary user. Never written as false; an absent key already says that."
+        },
+        "registers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 125,
+          "default": 1,
+          "description": "How many consecutive addresses this entry occupies, starting at `address`. Absent means 1. The registers are concatenated into one raw value that the fields below cut up with `bits`, so this is step one of describing anything wider than 16 bits: 2 for a 32-bit value, 4 for a 64-bit counter, as many as a string needs. It lives on the register rather than the field because occupying addresses is the register's business -- `encoding: uint32` on a field used to widen its register implicitly, which was the field reaching into what the register owns (D23). Bounded at 125, which is what one FC 3 or FC 4 response can carry: a value no single read can fetch is not a value, it is a protocol problem."
+        },
+        "word_order": {
+          "enum": [
+            "big",
+            "little"
+          ],
+          "description": "Which end of the raw value the FIRST address holds, and therefore how the registers concatenate before `bits` are counted. 'big' means the first address is the most significant word (ABCD), 'little' means it is the least significant (CDAB). Modbus fixes the byte order inside a register and says nothing about the order between them, so this is a per-device fact with no safe default -- required wherever `registers` exceeds 1. Bit positions are then counted from the LSB of the assembled value, not from a position on the wire, so a field's `bits` mean the same thing whichever convention a device uses."
         }
       }
     },
