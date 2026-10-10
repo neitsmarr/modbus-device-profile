@@ -1707,3 +1707,96 @@ real wide value, ours or a third party's, is what will confirm the bit-numbering
 convention against a datasheet. A multi-register entry also cannot be converted to
 the 3SModbus format, which describes one address per entry, so the generator
 reports it rather than emitting something plausible and wrong.
+
+## D24 — One type axis, not two; and a register group has a name
+
+### `type` and `encoding` are gone; `codec` is the only type axis
+
+    fields:
+      - id: operating_mode
+        codec: enum
+        enum: { 0: standby, 1: manual, 2: automatic }
+        default: automatic
+
+**The question that settled it was "why is `codec: uint` shared by bool, enum and
+int?"** The answer is that it should not have been. The split put the *reading*
+of bits in `codec` and the *meaning* in `type`, but bool-ness and enum-ness are
+not different readings of bits -- they are different interpretations of the number
+the bits make, which is what a codec is for. Having split one axis along the wrong
+line, the format then needed a `CODECS_FOR` table to say which of the 35
+combinations were legal.
+
+The merged axis has seven members: `bool`, `enum`, `uint`, `int`, `float32`,
+`float64`, `ascii`. **The library already worked this way** -- 3SModbus decoder
+types are `numerical`, `dictionary`, `bitwise`, `bytewise`, one axis, in
+production for years -- which is evidence that nothing is lost.
+
+`encoding` goes with it, and that is the better half of the change. It named a
+width *and* a reading, so `encoding: uint32` on a field silently widened its
+register. D23 had already moved width onto the register as `registers`, so the
+width half was redundant; D24 drops the key and `bits` gains a default: **absent
+means the whole group**. A plain 16-bit value is now one line, `codec: uint`,
+where it was two.
+
+**What is derived rather than declared.** Whether a number is a whole quantity or
+a continuous one is carried by `scale`: present means the engineering value is
+fractional, which is the rule a consumer would apply anyway when choosing between
+an integer and a float. That retires `type: real` versus `type: int` as a stored
+fact. One check went with it -- "a real read as an integer needs a scale" had
+nothing left to compare -- and a better one replaced it: `decimals` without
+`scale` is now an error, since showing two decimal places of a whole number is a
+contradiction between two facts rather than a missing third.
+
+**Each codec licenses its own companions**, so the legal combinations are
+structural instead of tabular: `enum` requires the map and nothing else may carry
+one, `labels` belong to `bool` alone, a float may not be scaled because it carries
+its own magnitude, and `max_length` counts characters so it belongs to `ascii`.
+`CODECS_FOR` and `ENCODINGS_FOR` are both deleted.
+
+Measured before acting: `type` agreed with what the other keys imply in **277 of
+277** fields, so nothing in the document had to be reinterpreted -- the migration
+was mechanical. The codec distribution is 107 bool, 94 uint, 45 int, 31 enum.
+
+### A register group has an `id`
+
+Required wherever the entry carries more than one field -- the same rule as
+`title`, and for the same reason: with a single field the group and the value are
+the same thing, and the field's own `id` already names it. 19 groups in this map
+have one.
+
+**Why a group needs a name at all: a bit field is not independently writable.**
+Setting bits 1-4 of a settings word means read-modify-write of the whole
+register, and two clients touching different fields of one register will clobber
+each other. That is a protocol fact with real consequences and the format had no
+subject to attach it to. The same goes for atomic multi-register writes (gap B4)
+and for the struct a firmware X-macro emits for a packed register.
+
+**Group ids and field ids share one namespace**, because an expression or a
+procedure names one or the other and a collision would make the reference
+ambiguous. `validate.py` rejects a group id that duplicates another group's or
+any field's, in either order.
+
+The 19 ids were derived from the titles already there -- `device_status_errors`
+from "Device Status - Errors" -- and checked against the field namespace before
+being written; there were no collisions.
+
+### The three-level model, stated plainly
+
+What a reader of this format needs to hold:
+
+| level | what it is | what it owns |
+|---|---|---|
+| address range | one or more consecutive registers in a space | `address`, `registers`, `word_order`, `access`, `id`, `title`, prose |
+| raw value | the 16 x N bit buffer those registers concatenate into | nothing -- it *is* what the range holds |
+| values | bit spans within that buffer | `id`, `codec`, unit, scale, range, conditions |
+
+The middle level has no name precisely because it has no facts of its own, which
+is why `word_order` belongs to the range rather than to the buffer or the value.
+
+**A bug this nearly shipped with.** Rewriting the field's `allOf` to hold the new
+per-codec rules overwrote the `$ref` to `presentation`, which silently disabled
+every check on `scale`, `range` and enum member names. Three existing negative
+tests caught it -- a scale of zero, a range with three numbers and an enum member
+with a space all stopped being rejected. That is the second time the negative
+suite has caught a schema edit that broke something unrelated, and it is the
+argument for keeping cases that look redundant.

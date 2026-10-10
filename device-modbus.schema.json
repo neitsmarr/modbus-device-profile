@@ -493,108 +493,19 @@
       "additionalProperties": false,
       "required": [
         "id",
-        "type"
+        "codec"
       ],
-      "description": "One property carried by this register, whole or as a single bit -- and everything a consumer needs in order to decode, display, validate and condition it. The identifier in `property` is the property's only name: expressions and procedures reference it.",
-      "oneOf": [
-        {
-          "required": [
-            "encoding"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "bit"
-                ]
-              },
-              {
-                "required": [
-                  "bits"
-                ]
-              },
-              {
-                "required": [
-                  "codec"
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "required": [
-            "bit"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "encoding"
-                ]
-              },
-              {
-                "required": [
-                  "bits"
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "required": [
-            "bits",
-            "codec"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "encoding"
-                ]
-              },
-              {
-                "required": [
-                  "bit"
-                ]
-              }
-            ]
-          }
-        }
-      ],
+      "description": "One value carried by this register group, and everything a consumer needs in order to decode, display, validate and condition it. Two keys describe the data: `bits` says which part of the group's raw value it occupies -- absent means all of it -- and `codec` says how those bits become a value. There is no separate semantic type: bool-ness and enum-ness are not different readings of bits, they are different interpretations of the number the bits make, which is what a codec is for (D24).",
       "properties": {
         "id": {
           "$ref": "#/$defs/identifier",
           "description": "This value's only name, and the one thing in the format that exists purely to be referenced: an expression or a procedure names another value by it rather than by address, which would break the moment the map is renumbered. D1's reverse-dependency index is built from those references, and the firmware X-macro pastes the same token. Two fields cannot share one."
-        },
-        "encoding": {
-          "enum": [
-            "uint16",
-            "int16",
-            "uint32",
-            "int32",
-            "uint64",
-            "int64",
-            "float32",
-            "float64",
-            "chars"
-          ],
-          "description": "Shorthand for the common whole-value cases, in terms of `registers`, `bits` and `codec`: uint16 and int16 are one register and bits 0..15; uint32, int32 and float32 are two and bits 0..31; uint64, int64 and float64 are four and bits 0..63; chars is ascii over whatever the register count gives. Kept because 190 of the 277 fields here are plain 16-bit values and writing three keys where one did is a bad trade for the common case -- the same proportion argument that kept `bit: n` beside `bits: [n, n]`. validate.py checks the shorthand against the register's declared width, so the two cannot disagree."
         },
         "bit": {
           "type": "integer",
           "minimum": 0,
           "maximum": 15,
           "description": "A single bit position, for a bool packed into this register. Shorthand for `bits: [n, n]`, kept because a lone bit is the overwhelmingly common case and a pair reads worse than the thing it describes. No encoding is given: a bit is a bit."
-        },
-        "type": {
-          "enum": [
-            "bool",
-            "int",
-            "real",
-            "enum",
-            "text"
-          ],
-          "description": "What the value IS, as against how this register carries it. Stated rather than derived from the presence of `enum`, `labels` or `scale`: that derivation is exact on a scaled integer map and wrong the moment a device sends a genuine float32, which carries no scale (D16's reason for keeping `encoding` explicit, in the other direction)."
         },
         "max_length": {
           "type": "integer",
@@ -766,22 +677,127 @@
             "minimum": 0,
             "maximum": 1999
           },
-          "description": "An inclusive [low, high] span of bit positions within the register entry's raw value, counted from its least significant bit. For a single register that is 0..15; for `registers: 2` it is 0..31, so a value may straddle the boundary between two addresses or share a 32-bit entry with others. The span's width fixes the value's capacity: [5, 6] holds 0..3, so a five-member enum does not fit, and validate.py checks that against both `enum` and `range`. The bound here is merely generous; the real limit is 16 x registers, which a schema cannot see."
+          "description": "An inclusive [low, high] span of bit positions within the group's raw value, counted from its least significant bit. **Absent means the whole group**, which is the common case: a single 16-bit value is `codec: uint` and nothing else. For `registers: 2` the span runs 0..31, so a value may straddle the boundary between two addresses or share a wide entry with others. The span's width fixes capacity: [5, 6] holds 0..3, so a five-member enum does not fit. The bound here is merely generous; the real limit is 16 x registers, which a schema cannot see."
         },
         "codec": {
           "enum": [
+            "bool",
+            "enum",
             "uint",
             "int",
             "float32",
             "float64",
             "ascii"
           ],
-          "description": "How the bits in `bits` become a value. 'uint' and 'int' read the span as a plain or two's complement integer of its own width, so a signed sub-field is expressible where it was not before. 'float32' and 'float64' are IEEE 754 and therefore not arbitrary spans: each needs its exact width and 16-bit alignment, which validate.py checks. 'ascii' reads 8 bits per character, which is what makes a string's length arithmetic rather than an assumption -- `bits: [0, 159]` is 20 characters and nothing has to be told so. Given with `bits`; `encoding` is the shorthand that supplies both."
+          "description": "How the bits become a value, and the only type axis there is. 'bool' is a truth value, with `labels` naming its two states; 'enum' reads unsigned and maps through `enum`; 'uint' and 'int' are plain and two's complement integers of the span's own width, so a signed sub-field is expressible; 'float32' and 'float64' are IEEE 754 and therefore need their exact width and 16-bit alignment; 'ascii' reads 8 bits per character, which makes a string's length arithmetic rather than an assumption. Each codec licenses its own companions -- `enum` needs the map, 'bool' takes `labels`, the numeric ones take `scale`, `range` and `step` -- so the legal combinations are structural rather than a table. Whether a number is a whole quantity or a continuous one is carried by `scale`: present means the engineering value is fractional."
         }
       },
       "allOf": [
         {
           "$ref": "#/$defs/presentation"
+        },
+        {
+          "description": "`bit: n` is shorthand for `bits: [n, n]`, so giving both says one thing twice and possibly differently.",
+          "not": {
+            "allOf": [
+              {
+                "required": [
+                  "bit"
+                ]
+              },
+              {
+                "required": [
+                  "bits"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "description": "An enum codec needs the map it reads through, and nothing else may carry one.",
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "codec"
+            ]
+          },
+          "then": {
+            "required": [
+              "enum"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "enum"
+              ]
+            }
+          }
+        },
+        {
+          "description": "`labels` name a bool's two states; no other codec has two states to name.",
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "bool"
+              }
+            },
+            "required": [
+              "codec"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "labels"
+              ]
+            }
+          }
+        },
+        {
+          "description": "A float carries its own magnitude, so scaling one is a sign that the codec or the scale is wrong.",
+          "if": {
+            "properties": {
+              "codec": {
+                "enum": [
+                  "float32",
+                  "float64"
+                ]
+              }
+            },
+            "required": [
+              "codec"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "scale"
+              ]
+            }
+          }
+        },
+        {
+          "description": "max_length counts characters, so it belongs to the character codec.",
+          "if": {
+            "required": [
+              "max_length"
+            ]
+          },
+          "then": {
+            "properties": {
+              "codec": {
+                "const": "ascii"
+              }
+            },
+            "required": [
+              "codec"
+            ]
+          }
         }
       ]
     },
@@ -841,7 +857,7 @@
                     "bit"
                   ],
                   "properties": {
-                    "type": {
+                    "codec": {
                       "const": "bool"
                     }
                   }
@@ -952,11 +968,33 @@
               ]
             }
           }
+        },
+        {
+          "description": "A group carrying several fields needs its own name: there is no single field whose id could stand for it.",
+          "if": {
+            "required": [
+              "fields"
+            ],
+            "properties": {
+              "fields": {
+                "minItems": 2
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "id"
+            ]
+          }
         }
       ],
       "properties": {
         "address": {
           "$ref": "#/$defs/address"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "A machine name for this register group, required wherever the entry carries more than one field -- the same rule as `title`, and for the same reason: where there is a single field the group and the value are the same thing and the field's `id` already names it. It exists because a group is a thing consumers must refer to. A bit field is not independently writable: setting bits 1-4 of a settings word means read-modify-write of the whole register, and two clients touching different fields of one register will clobber each other. That constraint, atomic multi-register writes, and the struct a firmware X-macro emits for a packed register all need a subject, and this is it."
         },
         "from": {
           "$ref": "#/$defs/address"

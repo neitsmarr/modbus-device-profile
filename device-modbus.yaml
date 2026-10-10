@@ -143,8 +143,7 @@ spaces:
         access: read_write
         fields:
           - id: server_slave_address
-            encoding: uint16
-            type: int
+            codec: uint
             range: [1, 247]
             default: 1
 
@@ -153,8 +152,7 @@ spaces:
         access: read_write
         fields:
           - id: server_baud_rate
-            encoding: uint16
-            type: enum
+            codec: enum
             unit: bps
             default: b19200
             enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
@@ -164,8 +162,7 @@ spaces:
         access: read_write
         fields:
           - id: server_parity
-            encoding: uint16
-            type: enum
+            codec: enum
             default: even_8e1
             enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
 
@@ -174,16 +171,14 @@ spaces:
         access: read_only
         fields:
           - id: device_type
-            encoding: uint16
-            type: int
+            codec: uint
 
       - address: 5
         title: "Hardware Version"
         access: read_only
         fields:
           - id: hardware_version
-            encoding: uint16
-            type: int
+            codec: uint
             display: version
 
       - address: 6
@@ -191,8 +186,7 @@ spaces:
         access: read_only
         fields:
           - id: firmware_version
-            encoding: uint16
-            type: int
+            codec: uint
             display: version
 
       - address: 9
@@ -200,8 +194,7 @@ spaces:
         access: read_write
         fields:
           - id: server_termination_resistor
-            encoding: uint16
-            type: bool
+            codec: bool
             default: disconnected
             labels: { false: disconnected, true: connected }
 
@@ -210,8 +203,7 @@ spaces:
         access: write_only
         fields:
           - id: modbus_registers_reset
-            encoding: uint16
-            type: bool
+            codec: bool
             default: idle
             labels: { false: idle, true: reset }
 
@@ -220,8 +212,7 @@ spaces:
         access: read_write
         fields:
           - id: client_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: disabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -233,8 +224,7 @@ spaces:
         access: read_write
         fields:
           - id: client_baud_rate
-            encoding: uint16
-            type: enum
+            codec: enum
             unit: bps
             default: b19200
             enum: { 0: b4800, 1: b9600, 2: b19200, 3: b38400, 4: b57600, 5: b115200 }
@@ -245,8 +235,7 @@ spaces:
         access: read_write
         fields:
           - id: client_parity
-            encoding: uint16
-            type: enum
+            codec: enum
             default: even_8e1
             enum: { 0: none_8n1, 1: even_8e1, 2: odd_8o1 }
             present_when: "client_enable == enabled"
@@ -256,8 +245,7 @@ spaces:
         access: read_write
         fields:
           - id: client_poll_interval
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ms
             range: [100, 10000]
             step: 100
@@ -269,8 +257,7 @@ spaces:
         access: read_write
         fields:
           - id: client_response_timeout
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ms
             range: [50, 5000]
             default: 500
@@ -281,8 +268,7 @@ spaces:
         access: read_write
         fields:
           - id: client_retry_count
-            encoding: uint16
-            type: int
+            codec: uint
             range: [0, 5]
             default: 2
             present_when: "client_enable == enabled"
@@ -300,8 +286,7 @@ spaces:
         access: read_write
         fields:
           - id: left_right_swap
-            encoding: uint16
-            type: bool
+            codec: bool
             default: normal
             labels: { false: normal, true: swapped }
             on_write:
@@ -312,8 +297,7 @@ spaces:
         access: read_write
         fields:
           - id: operating_mode
-            encoding: uint16
-            type: enum
+            codec: enum
             default: automatic
             enum: { 0: standby, 1: manual, 2: automatic, 3: boost, 4: away }
             on_write:
@@ -325,8 +309,7 @@ spaces:
         access: read_write
         fields:
           - id: ventilation_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             step: 5
@@ -338,8 +321,7 @@ spaces:
         access: read_write
         fields:
           - id: co2_setpoint
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [600, 1500]
             step: 50
@@ -351,8 +333,7 @@ spaces:
         access: read_write
         fields:
           - id: humidity_setpoint
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%RH"
             range: [30, 70]
             default: 55
@@ -368,8 +349,7 @@ spaces:
         access: read_write
         fields:
           - id: modbus_safety_timeout
-            encoding: uint16
-            type: int
+            codec: uint
             unit: minutes
             range: [0, 240]
             default: 0
@@ -379,8 +359,7 @@ spaces:
         access: write_only
         fields:
           - id: sensor_bus_rescan
-            encoding: uint16
-            type: bool
+            codec: bool
             default: idle
             labels: { false: idle, true: rescan }
 
@@ -389,8 +368,7 @@ spaces:
         access: read_write
         fields:
           - id: outdoor_air_temperature_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: none
             enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
             on_write:
@@ -402,8 +380,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_air_temperature_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: none
             enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
             on_write:
@@ -415,8 +392,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_air_temperature_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: none
             enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
             on_write:
@@ -428,8 +404,7 @@ spaces:
         access: read_write
         fields:
           - id: exhaust_air_temperature_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: none
             enum: { 0: none, 1: supply_ch1, 2: supply_ch2, 3: supply_ch3, 4: extract_ch1, 5: extract_ch2, 6: extract_ch3 }
             on_write:
@@ -446,8 +421,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_installed
-            encoding: uint16
-            type: bool
+            codec: bool
             default: not_installed
             labels: { false: not_installed, true: installed }
             on_write:
@@ -459,8 +433,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_control_mode
-            encoding: uint16
-            type: enum
+            codec: enum
             default: frost_protection
             enum: { 0: disabled, 1: frost_protection, 2: supply_temperature }
             present_when: "preheater_installed == installed"
@@ -472,8 +445,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_output_type
-            encoding: uint16
-            type: enum
+            codec: enum
             default: v0_10
             enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
             present_when: "preheater_installed == installed"
@@ -483,8 +455,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_minimum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 50]
             default: 0
@@ -495,8 +466,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_maximum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [50, 100]
             default: 100
@@ -507,8 +477,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_frost_protection_setpoint
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -521,8 +490,7 @@ spaces:
         access: read_write
         fields:
           - id: preheater_supply_temperature_setpoint
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -535,8 +503,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_control_mode
-            encoding: uint16
-            type: enum
+            codec: enum
             default: automatic
             enum: { 0: disabled, 1: automatic, 2: manual }
             on_write:
@@ -548,8 +515,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_output_type
-            encoding: uint16
-            type: enum
+            codec: enum
             default: v0_10
             enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
             present_when: "bypass_control_mode != disabled"
@@ -563,8 +529,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_minimum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 40]
             default: 0
@@ -575,8 +540,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_maximum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [60, 100]
             default: 100
@@ -587,8 +551,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_outdoor_temperature_threshold
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -601,8 +564,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_extract_temperature_threshold
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -615,8 +577,7 @@ spaces:
         access: read_write
         fields:
           - id: bypass_manual_position
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             step: 5
@@ -628,8 +589,7 @@ spaces:
         access: read_write
         fields:
           - id: filter_monitoring_mode
-            encoding: uint16
-            type: enum
+            codec: enum
             default: elapsed_time
             enum: { 0: disabled, 1: elapsed_time, 2: differential_pressure }
             on_write:
@@ -641,8 +601,7 @@ spaces:
         access: read_write
         fields:
           - id: filter_replacement_interval
-            encoding: uint16
-            type: int
+            codec: uint
             unit: days
             range: [30, 365]
             default: 90
@@ -653,8 +612,7 @@ spaces:
         access: read_write
         fields:
           - id: filter_differential_pressure_threshold
-            encoding: uint16
-            type: int
+            codec: uint
             unit: Pa
             range: [50, 500]
             default: 200
@@ -665,8 +623,7 @@ spaces:
         access: write_only
         fields:
           - id: filter_counter_reset
-            encoding: uint16
-            type: bool
+            codec: bool
             default: idle
             labels: { false: idle, true: reset }
             present_when: "filter_monitoring_mode == elapsed_time"
@@ -676,8 +633,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_control_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: analog_output
             enum: { 0: analog_output, 1: modbus }
             on_write:
@@ -689,8 +645,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_analog_output_type
-            encoding: uint16
-            type: enum
+            codec: enum
             default: v0_10
             enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
             present_when: "supply_fan_control_source == analog_output"
@@ -700,8 +655,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_minimum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [20, 60]
             default: 30
@@ -711,8 +665,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_maximum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [60, 100]
             default: 100
@@ -722,8 +675,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_start_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [20, 100]
             default: 50
@@ -733,8 +685,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_kickstart_control
-            encoding: uint16
-            type: enum
+            codec: enum
             default: softstart
             enum: { 0: softstart, 1: kickstart }
 
@@ -743,8 +694,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_kickstart_time
-            encoding: uint16
-            type: int
+            codec: uint
             unit: seconds
             range: [2, 10]
             default: 5
@@ -755,8 +705,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_modbus_slave_address
-            encoding: uint16
-            type: int
+            codec: uint
             range: [1, 247]
             default: 1
             present_when: "supply_fan_control_source == modbus"
@@ -766,8 +715,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_modbus_speed_register
-            encoding: uint16
-            type: int
+            codec: uint
             range: [1, 65535]
             present_when: "supply_fan_control_source == modbus"
 
@@ -776,8 +724,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_overwrite_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: automatic
             labels: { false: automatic, true: overwrite }
             on_write:
@@ -788,8 +735,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_fan_overwrite_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             default: 50
@@ -800,8 +746,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_digital_input_function
-            encoding: uint16
-            type: enum
+            codec: enum
             default: disabled
             enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
             on_write:
@@ -812,8 +757,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_digital_input_polarity
-            encoding: uint16
-            type: bool
+            codec: bool
             default: normally_open
             labels: { false: normally_open, true: normally_closed }
             present_when: "supply_digital_input_function != disabled"
@@ -823,8 +767,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_control_source
-            encoding: uint16
-            type: enum
+            codec: enum
             default: analog_output
             enum: { 0: analog_output, 1: modbus }
             on_write:
@@ -836,8 +779,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_analog_output_type
-            encoding: uint16
-            type: enum
+            codec: enum
             default: v0_10
             enum: { 0: v0_10, 1: ma0_20, 2: pwm_12v, 3: pwm_open_collector }
             present_when: "extract_fan_control_source == analog_output"
@@ -847,8 +789,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_minimum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [20, 60]
             default: 30
@@ -858,8 +799,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_maximum_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [60, 100]
             default: 100
@@ -869,8 +809,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_start_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [20, 100]
             default: 50
@@ -880,8 +819,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_kickstart_control
-            encoding: uint16
-            type: enum
+            codec: enum
             default: softstart
             enum: { 0: softstart, 1: kickstart }
 
@@ -890,8 +828,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_kickstart_time
-            encoding: uint16
-            type: int
+            codec: uint
             unit: seconds
             range: [2, 10]
             default: 5
@@ -902,8 +839,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_modbus_slave_address
-            encoding: uint16
-            type: int
+            codec: uint
             range: [1, 247]
             default: 1
             present_when: "extract_fan_control_source == modbus"
@@ -913,8 +849,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_modbus_speed_register
-            encoding: uint16
-            type: int
+            codec: uint
             range: [1, 65535]
             present_when: "extract_fan_control_source == modbus"
 
@@ -923,8 +858,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_overwrite_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: automatic
             labels: { false: automatic, true: overwrite }
             on_write:
@@ -935,8 +869,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_fan_overwrite_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             default: 50
@@ -947,8 +880,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_digital_input_function
-            encoding: uint16
-            type: enum
+            codec: enum
             default: disabled
             enum: { 0: disabled, 1: boost, 2: away, 3: external_fault, 4: filter_switch }
             on_write:
@@ -959,8 +891,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_digital_input_polarity
-            encoding: uint16
-            type: bool
+            codec: bool
             default: normally_open
             labels: { false: normally_open, true: normally_closed }
             present_when: "extract_digital_input_function != disabled"
@@ -970,8 +901,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -983,8 +913,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -997,8 +926,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1011,8 +939,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1024,8 +951,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1037,8 +963,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1051,8 +976,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1063,8 +987,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1075,8 +998,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1087,8 +1009,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch1_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1099,8 +1020,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -1112,8 +1032,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1126,8 +1045,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1140,8 +1058,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1153,8 +1070,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1166,8 +1082,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1180,8 +1095,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1192,8 +1106,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1204,8 +1117,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1216,8 +1128,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch2_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1228,8 +1139,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -1241,8 +1151,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1255,8 +1164,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1269,8 +1177,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1282,8 +1189,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1295,8 +1201,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1309,8 +1214,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1321,8 +1225,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1333,8 +1236,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1345,8 +1247,7 @@ spaces:
         access: read_write
         fields:
           - id: supply_ch3_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1357,8 +1258,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -1370,8 +1270,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1384,8 +1283,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1398,8 +1296,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1411,8 +1308,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1424,8 +1320,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1438,8 +1333,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1450,8 +1344,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1462,8 +1355,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1474,8 +1366,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch1_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1486,8 +1377,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -1499,8 +1389,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1513,8 +1402,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1527,8 +1415,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1540,8 +1427,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1553,8 +1439,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1567,8 +1452,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1579,8 +1463,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1591,8 +1474,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1603,8 +1485,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch2_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1615,8 +1496,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_enable
-            encoding: uint16
-            type: bool
+            codec: bool
             default: enabled
             labels: { false: disabled, true: enabled }
             on_write:
@@ -1628,8 +1508,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_temperature_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1642,8 +1521,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_relative_humidity_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -1656,8 +1534,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_voc_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: index
             decimals: 0
             range: [-50, 50]
@@ -1669,8 +1546,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_carbon_dioxide_correction
-            encoding: int16
-            type: int
+            codec: int
             unit: ppm
             decimals: 0
             range: [-200, 200]
@@ -1682,8 +1558,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_barometric_pressure_correction
-            encoding: int16
-            type: real
+            codec: int
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -1696,8 +1571,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_carbon_dioxide_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1000
@@ -1708,8 +1582,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_carbon_dioxide_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             range: [400, 5000]
             default: 1400
@@ -1720,8 +1593,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_voc_alert_1_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 150
@@ -1732,8 +1604,7 @@ spaces:
         access: read_write
         fields:
           - id: extract_ch3_voc_alert_2_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             range: [0, 500]
             default: 300
@@ -1744,8 +1615,7 @@ spaces:
         access: write_only
         fields:
           - id: device_reset
-            encoding: uint16
-            type: bool
+            codec: bool
             default: idle
             labels: { false: idle, true: reset }
 
@@ -1754,6 +1624,7 @@ spaces:
     registers:
 
       - address: 1
+        id: device_status_errors
         title: "Device Status - Errors"
         description: >-
           Fault conditions that stop normal operation. Any bit set
@@ -1762,38 +1633,39 @@ spaces:
         fields:
           - id: error_supply_voltage_fault
             bit: 0
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Supply Voltage Fault"
           - id: error_internal_voltage_fault
             bit: 1
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Internal Voltage Fault"
           - id: error_memory_fault
             bit: 2
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Memory Fault"
           - id: error_supply_fan_fault
             bit: 3
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Supply Fan Fault"
           - id: error_extract_fan_fault
             bit: 4
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Extract Fan Fault"
           - id: error_sensor_bus_fault
             bit: 5
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Sensor Bus Fault"
           - id: error_preheater_fault
             bit: 6
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Preheater Fault"
           - id: error_bypass_fault
             bit: 7
-            type: bool
+            codec: bool
             title: "Device Status - Errors: Bypass Fault"
 
       - address: 2
+        id: device_status_warnings
         title: "Device Status - Warnings"
         description: >-
           Conditions that degrade operation or need attention but do
@@ -1802,35 +1674,34 @@ spaces:
         fields:
           - id: warning_supply_voltage_warning
             bit: 0
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Supply Voltage Warning"
           - id: warning_internal_voltage_warning
             bit: 1
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Internal Voltage Warning"
           - id: warning_sensor_replacement_due
             bit: 2
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Sensor Replacement Due"
           - id: warning_client_interface_degraded
             bit: 3
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Client Interface Degraded"
           - id: warning_filter_replacement_due
             bit: 4
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Filter Replacement Due"
           - id: warning_efficiency_below_expected
             bit: 5
-            type: bool
+            codec: bool
             title: "Device Status - Warnings: Efficiency Below Expected"
 
       - address: 3
         title: "Supply Voltage"
         fields:
           - id: supply_voltage
-            encoding: uint16
-            type: real
+            codec: uint
             unit: VDC
             scale: 0.1
             decimals: 1
@@ -1839,8 +1710,7 @@ spaces:
         title: "Client Interface State"
         fields:
           - id: client_state
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: idle, 1: polling, 2: degraded, 3: bus_fault }
             valid_when: "client_enable == enabled"
 
@@ -1848,24 +1718,21 @@ spaces:
         title: "Application State"
         fields:
           - id: application_state
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: idle, 1: ventilating, 2: boosting, 3: away, 4: fault }
 
       - address: 13
         title: "Sensor Bus State"
         fields:
           - id: sensor_bus_state
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: idle, 1: scanning, 2: complete, 3: failed }
 
       - address: 21
         title: "Outdoor Air Temperature"
         fields:
           - id: outdoor_air_temperature
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1876,8 +1743,7 @@ spaces:
         title: "Supply Air Temperature"
         fields:
           - id: supply_air_temperature
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1888,8 +1754,7 @@ spaces:
         title: "Extract Air Temperature"
         fields:
           - id: extract_air_temperature
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1900,8 +1765,7 @@ spaces:
         title: "Exhaust Air Temperature"
         fields:
           - id: exhaust_air_temperature
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -1918,8 +1782,7 @@ spaces:
           outdoor are too close together to divide by.
         fields:
           - id: heat_recovery_efficiency
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             valid_when: "outdoor_air_temperature_source != none and supply_air_temperature_source != none and extract_air_temperature_source != none"
@@ -1928,13 +1791,13 @@ spaces:
         title: "Pre-heater Output Value"
         fields:
           - id: preheater_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             valid_when: "preheater_installed == installed"
 
       - address: 32
+        id: pre_heater_state
         title: "Pre-heater State"
         description: >-
           Pre-heater diagnostics. Meaningful only on units where the
@@ -1943,22 +1806,22 @@ spaces:
         fields:
           - id: preheater_fault
             bit: 0
-            type: bool
+            codec: bool
             title: "Pre-heater State: Heater Fault"
             valid_when: "preheater_installed == installed"
           - id: preheater_thermal_cutout_open
             bit: 1
-            type: bool
+            codec: bool
             title: "Pre-heater State: Thermal Cutout Open"
             valid_when: "preheater_installed == installed"
           - id: preheater_output_saturated
             bit: 2
-            type: bool
+            codec: bool
             title: "Pre-heater State: Output Saturated"
             valid_when: "preheater_installed == installed"
           - id: preheater_frost_protection_active
             bit: 3
-            type: bool
+            codec: bool
             title: "Pre-heater State: Frost Protection Active"
             valid_when: "preheater_installed == installed"
 
@@ -1966,13 +1829,13 @@ spaces:
         title: "Bypass Position"
         fields:
           - id: bypass_position
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
             valid_when: "bypass_control_mode != disabled"
 
       - address: 42
+        id: bypass_state
         title: "Bypass State"
         description: >-
           Bypass damper diagnostics, including the two conditions
@@ -1982,22 +1845,22 @@ spaces:
         fields:
           - id: bypass_damper_fault
             bit: 0
-            type: bool
+            codec: bool
             title: "Bypass State: Damper Fault"
             valid_when: "bypass_control_mode != disabled"
           - id: bypass_position_feedback_missing
             bit: 1
-            type: bool
+            codec: bool
             title: "Bypass State: Position Feedback Missing"
             valid_when: "bypass_control_mode != disabled"
           - id: bypass_held_closed_by_frost_protection
             bit: 2
-            type: bool
+            codec: bool
             title: "Bypass State: Held Closed By Frost Protection"
             valid_when: "bypass_control_mode != disabled"
           - id: bypass_held_closed_by_missing_temperature
             bit: 3
-            type: bool
+            codec: bool
             title: "Bypass State: Held Closed By Missing Temperature"
             valid_when: "bypass_control_mode != disabled"
 
@@ -2005,8 +1868,7 @@ spaces:
         title: "Filter Elapsed Time"
         fields:
           - id: filter_elapsed_time
-            encoding: uint16
-            type: int
+            codec: uint
             unit: days
             range: [0, 999]
             valid_when: "filter_monitoring_mode == elapsed_time"
@@ -2015,30 +1877,30 @@ spaces:
         title: "Filter Differential Pressure"
         fields:
           - id: filter_differential_pressure
-            encoding: uint16
-            type: int
+            codec: uint
             unit: Pa
             range: [0, 1000]
             valid_when: "filter_monitoring_mode == differential_pressure"
 
       - address: 53
+        id: filter_state
         title: "Filter State"
         description: "Filter condition as judged by the selected monitoring mode."
         clear_label: OK
         fields:
           - id: filter_replacement_due
             bit: 0
-            type: bool
+            codec: bool
             title: "Filter State: Replacement Due"
             valid_when: "filter_monitoring_mode != disabled"
           - id: filter_replacement_overdue
             bit: 1
-            type: bool
+            codec: bool
             title: "Filter State: Replacement Overdue"
             valid_when: "filter_monitoring_mode != disabled"
           - id: filter_pressure_sensor_fault
             bit: 2
-            type: bool
+            codec: bool
             title: "Filter State: Pressure Sensor Fault"
             valid_when: "filter_monitoring_mode != disabled"
 
@@ -2046,8 +1908,7 @@ spaces:
         title: "Supply Fan Output Value"
         fields:
           - id: supply_fan_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
 
@@ -2055,12 +1916,12 @@ spaces:
         title: "Supply Fan Speed"
         fields:
           - id: supply_fan_speed
-            encoding: uint16
-            type: int
+            codec: uint
             unit: rpm
             range: [0, 5000]
 
       - address: 103
+        id: supply_fan_state
         title: "Supply Fan State"
         description: >-
           Fault and diagnostic bits for the supply fan channel,
@@ -2069,27 +1930,26 @@ spaces:
         fields:
           - id: supply_fan_fault
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Fan State: Fan Fault"
           - id: supply_fan_tacho_missing
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Fan State: Tacho Missing"
           - id: supply_fan_modbus_timeout
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Fan State: Modbus Timeout"
           - id: supply_fan_blocked_rotor
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Fan State: Blocked Rotor"
 
       - address: 104
         title: "Supply Digital Input State"
         fields:
           - id: supply_digital_input_state
-            encoding: uint16
-            type: bool
+            codec: bool
             labels: { false: low, true: high }
             valid_when: "supply_digital_input_function != disabled"
 
@@ -2097,8 +1957,7 @@ spaces:
         title: "Extract Fan Output Value"
         fields:
           - id: extract_fan_output_value
-            encoding: uint16
-            type: int
+            codec: uint
             unit: "%"
             range: [0, 100]
 
@@ -2106,12 +1965,12 @@ spaces:
         title: "Extract Fan Speed"
         fields:
           - id: extract_fan_speed
-            encoding: uint16
-            type: int
+            codec: uint
             unit: rpm
             range: [0, 5000]
 
       - address: 133
+        id: extract_fan_state
         title: "Extract Fan State"
         description: >-
           Fault and diagnostic bits for the extract fan channel,
@@ -2120,31 +1979,31 @@ spaces:
         fields:
           - id: extract_fan_fault
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Fan State: Fan Fault"
           - id: extract_fan_tacho_missing
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Fan State: Tacho Missing"
           - id: extract_fan_modbus_timeout
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Fan State: Modbus Timeout"
           - id: extract_fan_blocked_rotor
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Fan State: Blocked Rotor"
 
       - address: 134
         title: "Extract Digital Input State"
         fields:
           - id: extract_digital_input_state
-            encoding: uint16
-            type: bool
+            codec: bool
             labels: { false: low, true: high }
             valid_when: "extract_digital_input_function != disabled"
 
       - address: 201
+        id: supply_channel_1_sensor_capability
         title: "Supply Channel 1 - Sensor Capability"
         description: >-
           Which measurands the sensor module on supply channel 1
@@ -2154,26 +2013,27 @@ spaces:
         fields:
           - id: supply_ch1_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor Capability: Temperature"
           - id: supply_ch1_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor Capability: Relative Humidity"
           - id: supply_ch1_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor Capability: VOC"
           - id: supply_ch1_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor Capability: Carbon Dioxide"
           - id: supply_ch1_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor Capability: Barometric Pressure"
 
       - address: 202
+        id: supply_channel_1_sensor_state
         title: "Supply Channel 1 - Sensor State"
         description: >-
           Condition of the sensor module on supply channel 1. Its
@@ -2183,27 +2043,26 @@ spaces:
         fields:
           - id: supply_ch1_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor State: Sensor Problem"
           - id: supply_ch1_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor State: Sensor Replacement"
           - id: supply_ch1_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor State: Sensor Preheating"
           - id: supply_ch1_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 1 - Sensor State: Not Connected"
 
       - address: 203
         title: "Supply Channel 1 - Alerts"
         fields:
           - id: supply_ch1_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "supply_ch1_enable == enabled"
 
@@ -2211,8 +2070,7 @@ spaces:
         title: "Supply Channel 1 - Temperature Level"
         fields:
           - id: supply_ch1_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2224,8 +2082,7 @@ spaces:
         title: "Supply Channel 1 - Relative Humidity Level"
         fields:
           - id: supply_ch1_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2237,8 +2094,7 @@ spaces:
         title: "Supply Channel 1 - VOC Level"
         fields:
           - id: supply_ch1_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2249,8 +2105,7 @@ spaces:
         title: "Supply Channel 1 - Carbon Dioxide Level"
         fields:
           - id: supply_ch1_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2261,8 +2116,7 @@ spaces:
         title: "Supply Channel 1 - Barometric Pressure Level"
         fields:
           - id: supply_ch1_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2271,6 +2125,7 @@ spaces:
             valid_when: "supply_ch1_enable == enabled and not supply_ch1_sensor_problem"
 
       - address: 221
+        id: supply_channel_2_sensor_capability
         title: "Supply Channel 2 - Sensor Capability"
         description: >-
           Which measurands the sensor module on supply channel 2
@@ -2280,26 +2135,27 @@ spaces:
         fields:
           - id: supply_ch2_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor Capability: Temperature"
           - id: supply_ch2_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor Capability: Relative Humidity"
           - id: supply_ch2_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor Capability: VOC"
           - id: supply_ch2_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor Capability: Carbon Dioxide"
           - id: supply_ch2_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor Capability: Barometric Pressure"
 
       - address: 222
+        id: supply_channel_2_sensor_state
         title: "Supply Channel 2 - Sensor State"
         description: >-
           Condition of the sensor module on supply channel 2. Its
@@ -2309,27 +2165,26 @@ spaces:
         fields:
           - id: supply_ch2_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor State: Sensor Problem"
           - id: supply_ch2_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor State: Sensor Replacement"
           - id: supply_ch2_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor State: Sensor Preheating"
           - id: supply_ch2_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 2 - Sensor State: Not Connected"
 
       - address: 223
         title: "Supply Channel 2 - Alerts"
         fields:
           - id: supply_ch2_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "supply_ch2_enable == enabled"
 
@@ -2337,8 +2192,7 @@ spaces:
         title: "Supply Channel 2 - Temperature Level"
         fields:
           - id: supply_ch2_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2350,8 +2204,7 @@ spaces:
         title: "Supply Channel 2 - Relative Humidity Level"
         fields:
           - id: supply_ch2_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2363,8 +2216,7 @@ spaces:
         title: "Supply Channel 2 - VOC Level"
         fields:
           - id: supply_ch2_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2375,8 +2227,7 @@ spaces:
         title: "Supply Channel 2 - Carbon Dioxide Level"
         fields:
           - id: supply_ch2_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2387,8 +2238,7 @@ spaces:
         title: "Supply Channel 2 - Barometric Pressure Level"
         fields:
           - id: supply_ch2_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2397,6 +2247,7 @@ spaces:
             valid_when: "supply_ch2_enable == enabled and not supply_ch2_sensor_problem"
 
       - address: 241
+        id: supply_channel_3_sensor_capability
         title: "Supply Channel 3 - Sensor Capability"
         description: >-
           Which measurands the sensor module on supply channel 3
@@ -2406,26 +2257,27 @@ spaces:
         fields:
           - id: supply_ch3_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor Capability: Temperature"
           - id: supply_ch3_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor Capability: Relative Humidity"
           - id: supply_ch3_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor Capability: VOC"
           - id: supply_ch3_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor Capability: Carbon Dioxide"
           - id: supply_ch3_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor Capability: Barometric Pressure"
 
       - address: 242
+        id: supply_channel_3_sensor_state
         title: "Supply Channel 3 - Sensor State"
         description: >-
           Condition of the sensor module on supply channel 3. Its
@@ -2435,27 +2287,26 @@ spaces:
         fields:
           - id: supply_ch3_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor State: Sensor Problem"
           - id: supply_ch3_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor State: Sensor Replacement"
           - id: supply_ch3_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor State: Sensor Preheating"
           - id: supply_ch3_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Supply Channel 3 - Sensor State: Not Connected"
 
       - address: 243
         title: "Supply Channel 3 - Alerts"
         fields:
           - id: supply_ch3_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "supply_ch3_enable == enabled"
 
@@ -2463,8 +2314,7 @@ spaces:
         title: "Supply Channel 3 - Temperature Level"
         fields:
           - id: supply_ch3_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2476,8 +2326,7 @@ spaces:
         title: "Supply Channel 3 - Relative Humidity Level"
         fields:
           - id: supply_ch3_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2489,8 +2338,7 @@ spaces:
         title: "Supply Channel 3 - VOC Level"
         fields:
           - id: supply_ch3_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2501,8 +2349,7 @@ spaces:
         title: "Supply Channel 3 - Carbon Dioxide Level"
         fields:
           - id: supply_ch3_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2513,8 +2360,7 @@ spaces:
         title: "Supply Channel 3 - Barometric Pressure Level"
         fields:
           - id: supply_ch3_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2523,6 +2369,7 @@ spaces:
             valid_when: "supply_ch3_enable == enabled and not supply_ch3_sensor_problem"
 
       - address: 261
+        id: extract_channel_1_sensor_capability
         title: "Extract Channel 1 - Sensor Capability"
         description: >-
           Which measurands the sensor module on extract channel 1
@@ -2532,26 +2379,27 @@ spaces:
         fields:
           - id: extract_ch1_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor Capability: Temperature"
           - id: extract_ch1_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor Capability: Relative Humidity"
           - id: extract_ch1_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor Capability: VOC"
           - id: extract_ch1_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor Capability: Carbon Dioxide"
           - id: extract_ch1_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor Capability: Barometric Pressure"
 
       - address: 262
+        id: extract_channel_1_sensor_state
         title: "Extract Channel 1 - Sensor State"
         description: >-
           Condition of the sensor module on extract channel 1. Its
@@ -2561,27 +2409,26 @@ spaces:
         fields:
           - id: extract_ch1_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor State: Sensor Problem"
           - id: extract_ch1_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor State: Sensor Replacement"
           - id: extract_ch1_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor State: Sensor Preheating"
           - id: extract_ch1_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 1 - Sensor State: Not Connected"
 
       - address: 263
         title: "Extract Channel 1 - Alerts"
         fields:
           - id: extract_ch1_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "extract_ch1_enable == enabled"
 
@@ -2589,8 +2436,7 @@ spaces:
         title: "Extract Channel 1 - Temperature Level"
         fields:
           - id: extract_ch1_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2602,8 +2448,7 @@ spaces:
         title: "Extract Channel 1 - Relative Humidity Level"
         fields:
           - id: extract_ch1_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2615,8 +2460,7 @@ spaces:
         title: "Extract Channel 1 - VOC Level"
         fields:
           - id: extract_ch1_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2627,8 +2471,7 @@ spaces:
         title: "Extract Channel 1 - Carbon Dioxide Level"
         fields:
           - id: extract_ch1_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2639,8 +2482,7 @@ spaces:
         title: "Extract Channel 1 - Barometric Pressure Level"
         fields:
           - id: extract_ch1_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2649,6 +2491,7 @@ spaces:
             valid_when: "extract_ch1_enable == enabled and not extract_ch1_sensor_problem"
 
       - address: 281
+        id: extract_channel_2_sensor_capability
         title: "Extract Channel 2 - Sensor Capability"
         description: >-
           Which measurands the sensor module on extract channel 2
@@ -2658,26 +2501,27 @@ spaces:
         fields:
           - id: extract_ch2_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor Capability: Temperature"
           - id: extract_ch2_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor Capability: Relative Humidity"
           - id: extract_ch2_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor Capability: VOC"
           - id: extract_ch2_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor Capability: Carbon Dioxide"
           - id: extract_ch2_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor Capability: Barometric Pressure"
 
       - address: 282
+        id: extract_channel_2_sensor_state
         title: "Extract Channel 2 - Sensor State"
         description: >-
           Condition of the sensor module on extract channel 2. Its
@@ -2687,27 +2531,26 @@ spaces:
         fields:
           - id: extract_ch2_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor State: Sensor Problem"
           - id: extract_ch2_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor State: Sensor Replacement"
           - id: extract_ch2_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor State: Sensor Preheating"
           - id: extract_ch2_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 2 - Sensor State: Not Connected"
 
       - address: 283
         title: "Extract Channel 2 - Alerts"
         fields:
           - id: extract_ch2_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "extract_ch2_enable == enabled"
 
@@ -2715,8 +2558,7 @@ spaces:
         title: "Extract Channel 2 - Temperature Level"
         fields:
           - id: extract_ch2_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2728,8 +2570,7 @@ spaces:
         title: "Extract Channel 2 - Relative Humidity Level"
         fields:
           - id: extract_ch2_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2741,8 +2582,7 @@ spaces:
         title: "Extract Channel 2 - VOC Level"
         fields:
           - id: extract_ch2_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2753,8 +2593,7 @@ spaces:
         title: "Extract Channel 2 - Carbon Dioxide Level"
         fields:
           - id: extract_ch2_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2765,8 +2604,7 @@ spaces:
         title: "Extract Channel 2 - Barometric Pressure Level"
         fields:
           - id: extract_ch2_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2775,6 +2613,7 @@ spaces:
             valid_when: "extract_ch2_enable == enabled and not extract_ch2_sensor_problem"
 
       - address: 301
+        id: extract_channel_3_sensor_capability
         title: "Extract Channel 3 - Sensor Capability"
         description: >-
           Which measurands the sensor module on extract channel 3
@@ -2784,26 +2623,27 @@ spaces:
         fields:
           - id: extract_ch3_provides_temperature
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor Capability: Temperature"
           - id: extract_ch3_provides_relative_humidity
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor Capability: Relative Humidity"
           - id: extract_ch3_provides_voc
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor Capability: VOC"
           - id: extract_ch3_provides_carbon_dioxide
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor Capability: Carbon Dioxide"
           - id: extract_ch3_provides_barometric_pressure
             bit: 4
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor Capability: Barometric Pressure"
 
       - address: 302
+        id: extract_channel_3_sensor_state
         title: "Extract Channel 3 - Sensor State"
         description: >-
           Condition of the sensor module on extract channel 3. Its
@@ -2813,27 +2653,26 @@ spaces:
         fields:
           - id: extract_ch3_sensor_problem
             bit: 0
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor State: Sensor Problem"
           - id: extract_ch3_sensor_replacement
             bit: 1
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor State: Sensor Replacement"
           - id: extract_ch3_sensor_preheating
             bit: 2
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor State: Sensor Preheating"
           - id: extract_ch3_sensor_not_connected
             bit: 3
-            type: bool
+            codec: bool
             title: "Extract Channel 3 - Sensor State: Not Connected"
 
       - address: 303
         title: "Extract Channel 3 - Alerts"
         fields:
           - id: extract_ch3_alerts
-            encoding: uint16
-            type: enum
+            codec: enum
             enum: { 0: ok, 1: yellow_alert, 2: red_alert }
             valid_when: "extract_ch3_enable == enabled"
 
@@ -2841,8 +2680,7 @@ spaces:
         title: "Extract Channel 3 - Temperature Level"
         fields:
           - id: extract_ch3_temperature_level
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2854,8 +2692,7 @@ spaces:
         title: "Extract Channel 3 - Relative Humidity Level"
         fields:
           - id: extract_ch3_relative_humidity_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: "%RH"
             scale: 0.1
             decimals: 1
@@ -2867,8 +2704,7 @@ spaces:
         title: "Extract Channel 3 - VOC Level"
         fields:
           - id: extract_ch3_voc_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: index
             decimals: 0
             range: [0, 500]
@@ -2879,8 +2715,7 @@ spaces:
         title: "Extract Channel 3 - Carbon Dioxide Level"
         fields:
           - id: extract_ch3_carbon_dioxide_level
-            encoding: uint16
-            type: int
+            codec: uint
             unit: ppm
             decimals: 0
             range: [0, 5000]
@@ -2891,8 +2726,7 @@ spaces:
         title: "Extract Channel 3 - Barometric Pressure Level"
         fields:
           - id: extract_ch3_barometric_pressure_level
-            encoding: uint16
-            type: real
+            codec: uint
             unit: hPa
             scale: 0.1
             decimals: 1
@@ -2904,8 +2738,7 @@ spaces:
         title: "MCU Temperature"
         fields:
           - id: mcu_temperature
-            encoding: int16
-            type: real
+            codec: int
             unit: "°C"
             scale: 0.1
             decimals: 1
@@ -2914,24 +2747,21 @@ spaces:
         title: "Lifetime - days"
         fields:
           - id: lifetime_days
-            encoding: uint16
-            type: int
+            codec: uint
             unit: days
 
       - address: 505
         title: "Lifetime - minutes"
         fields:
           - id: lifetime_minutes
-            encoding: uint16
-            type: int
+            codec: uint
             unit: minutes
 
       - address: 506
         title: "Internal voltage - 12VDC"
         fields:
           - id: internal_voltage_12v
-            encoding: uint16
-            type: real
+            codec: uint
             unit: VDC
             scale: 0.1
             decimals: 1
@@ -2940,8 +2770,7 @@ spaces:
         title: "Internal voltage - 3.3VDC"
         fields:
           - id: internal_voltage_3v3
-            encoding: uint16
-            type: real
+            codec: uint
             unit: VDC
             scale: 0.01
             decimals: 2

@@ -76,24 +76,10 @@ WIDTH_CAPACITY = {
 SPAN = {"uint16": 1, "int16": 1, "uint32": 2, "int32": 2, "float32": 2,
         "uint64": 4, "int64": 4, "float64": 4, "chars": 1}
 
-# What each `encoding` shorthand means in D23's terms: (registers, codec). The
-# bit span is the whole of those registers, so it follows from the count.
-ENCODING_SUGAR = {
-    "uint16": (1, "uint"), "int16": (1, "int"),
-    "uint32": (2, "uint"), "int32": (2, "int"), "float32": (2, "float32"),
-    "uint64": (4, "uint"), "int64": (4, "int"), "float64": (4, "float64"),
-    "chars": (None, "ascii"),      # the register count says how long
-}
-# Which codec can carry which semantic type.
-CODECS_FOR = {
-    "bool":  {"uint", "int"},
-    "int":   {"uint", "int"},
-    "real":  {"uint", "int", "float32", "float64"},
-    "enum":  {"uint"},
-    "text":  {"ascii"},
-}
-# A codec that is not an arbitrary span: exact width, aligned to a word.
+# A codec that is not an arbitrary span: exact width, aligned to a register.
 FIXED_WIDTH_CODECS = {"float32": 32, "float64": 64}
+# Codecs that read the bits as a number, and so take a range, a scale and a step.
+NUMERIC_CODECS = {"uint", "int", "enum"}
 
 
 class Report:
@@ -198,13 +184,25 @@ def field_index(doc, rep: Report) -> dict[str, dict]:
     """
     out: dict[str, dict] = {}
     where: dict[str, str] = {}
+
+    # Group ids and field ids share one namespace: an expression or a procedure
+    # names one or the other, so a collision makes the reference ambiguous (D24).
+    for space, reg, at in iter_registers(doc):
+        gid = reg.get("id")
+        if gid is None:
+            continue
+        if gid in where:
+            rep.error(f"{at}: group id '{gid}' is already used at {where[gid]}")
+        where[gid] = at
+
     for space, reg, field, at in iter_fields(doc):
         name = field.get("id")
         if name is None:
             continue
-        if name in out:
-            rep.error(f"{at}: '{name}' is already carried at {where[name]}; a property has "
-                      f"one name, so two fields cannot share it")
+        if name in where:
+            kind = "a field" if name in out else "a register group"
+            rep.error(f"{at}: '{name}' already names {kind} at {where[name]}; ids share one "
+                      f"namespace, so a reference to it would be ambiguous")
             continue
         out[name], where[name] = field, at
         field["__space"], field["__at"], field["__reg"] = space, at, reg
@@ -366,31 +364,27 @@ def register_width(reg) -> int:
 
 
 def resolve_field(reg, field):
-    """What a field actually occupies, as (low bit, high bit, codec).
+    """What a field occupies, as (low bit, high bit).
 
-    D23 describes data in two steps -- the entry's width, then a bit cut with a
-    codec inside it -- and `bit: n` and `encoding: uint16` are shorthands over
-    that. Expanding them here means every check downstream sees one form.
-    Returns None for a coil, whose address IS the bit.
+    D23 describes data in two steps -- the group's width, then a cut inside it --
+    and D24 made the cut optional: a field with no `bit` or `bits` occupies the
+    whole group, which is the common case. Returns None for a coil, whose address
+    IS the bit.
     """
     if "bits" in field:
         lo, hi = field["bits"]
-        return (lo, hi, field.get("codec"))
+        return (lo, hi)
     if "bit" in field:
-        return (field["bit"], field["bit"], "uint")
-    enc = field.get("encoding")
-    if enc in ENCODING_SUGAR:
-        regs, codec = ENCODING_SUGAR[enc]
-        width = 16 * (register_width(reg) if regs is None else regs)
-        return (0, width - 1, codec)
-    return None
+        return (field["bit"], field["bit"])
+    if reg.get("space_is_bit"):
+        return None
+    return (0, 16 * register_width(reg) - 1)
 
 
 def bit_span(field, reg=None):
-    """Back-compatible span accessor: the bits a PACKED field occupies."""
+    """The bits a field occupies where it names them explicitly, else None."""
     if "bits" in field or "bit" in field:
-        lo, hi, _ = resolve_field(reg or {}, field)
-        return (lo, hi)
+        return resolve_field(reg or {}, field)
     return None
 
 
@@ -630,15 +624,15 @@ def check_layout(doc, fields, rep: Report) -> None:
         for fi, field in enumerate(regfields):
             fat = f"{at}/fields/{fi}"
             name = field.get("id")
-            ftype = field.get("type")
+            codec = field.get("codec")
             resolved = resolve_field(reg, field)
 
             if resolved is None:            # a coil: its address IS the bit
-                if ftype != "bool":
-                    rep.error(f"{fat}: '{name}' is type '{ftype}', but a {space} carries one bit")
+                if codec not in (None, "bool"):
+                    rep.error(f"{fat}: '{name}' reads as '{codec}', but a {space} carries one bit")
                 continue
 
-            lo, hi, codec = resolved
+            lo, hi = resolved
             if hi < lo:
                 rep.error(f"{fat}: bit span [{lo}, {hi}] runs backwards")
                 continue
@@ -655,11 +649,9 @@ def check_layout(doc, fields, rep: Report) -> None:
 
             span_width = hi - lo + 1
 
-            # Step two: the codec has to suit the type, and some codecs are not
-            # arbitrary spans.
-            if codec and ftype and codec not in CODECS_FOR.get(ftype, set()):
-                rep.error(f"{fat}: type '{ftype}' cannot be read by codec '{codec}' "
-                          f"(allowed: {', '.join(sorted(CODECS_FOR[ftype]))})")
+            # Step two: what the codec needs of the span it was given. The old
+            # codec-versus-type table is gone with the type axis (D24); what is
+            # left is each codec's own arithmetic.
             if codec in FIXED_WIDTH_CODECS:
                 want = FIXED_WIDTH_CODECS[codec]
                 if span_width != want:
@@ -675,24 +667,25 @@ def check_layout(doc, fields, rep: Report) -> None:
                 elif "max_length" in field and field["max_length"] != span_width // 8:
                     rep.error(f"{fat}: {span_width} bits hold {span_width // 8} characters, "
                               f"but max_length says {field['max_length']}")
-            if ftype == "text" and codec != "ascii":
-                rep.error(f"{fat}: type 'text' needs a character codec, not '{codec}'")
-            if ftype == "real" and codec in ("uint", "int") and "scale" not in field:
-                rep.error(f"{fat}: a real read as an integer needs a scale, or its fractional "
-                          f"part is unrepresentable")
-            if span_width == 1 and ftype != "bool":
-                rep.error(f"{fat}: '{name}' is type '{ftype}', but one bit can only carry a bool")
-            elif span_width > 1 and ftype == "bool" and "encoding" not in field:
-                rep.error(f"{fat}: '{name}' is a bool spread over {span_width} bits; a bool "
-                          f"occupies one, and a wider span wants an int or an enum")
+            if codec == "bool" and span_width not in (1, capacity):
+                rep.error(f"{fat}: '{name}' reads as a bool over {span_width} bits; a bool is one "
+                          f"bit, or the whole entry read as zero/non-zero, not a span between")
+            if span_width == 1 and codec != "bool":
+                rep.error(f"{fat}: '{name}' reads as '{codec}', but one bit can only carry a bool")
+
+            # `scale` is what says a number is continuous rather than whole, so
+            # showing decimals of something unscaled is a contradiction.
+            if field.get("decimals") and "scale" not in field and codec in ("uint", "int"):
+                rep.error(f"{fat}: shows {field['decimals']} decimal place(s) but has no scale, "
+                          f"so the value it decodes is a whole number")
 
             # Capacity: what the span can actually hold, signed or not.
-            if codec == "int":
-                cap_lo, cap_hi = -(1 << (span_width - 1)), (1 << (span_width - 1)) - 1
-            else:
-                cap_lo, cap_hi = 0, (1 << span_width) - 1
-            if codec in ("uint", "int"):
-                if ftype == "enum":
+            if codec in NUMERIC_CODECS:
+                if codec == "int":
+                    cap_lo, cap_hi = -(1 << (span_width - 1)), (1 << (span_width - 1)) - 1
+                else:
+                    cap_lo, cap_hi = 0, (1 << span_width) - 1
+                if codec == "enum":
                     top = max((int(v) for v in (field.get("enum") or {})), default=0)
                     if top > cap_hi:
                         rep.error(f"{fat}: enum value {top} does not fit {span_width} bit(s), "
@@ -703,20 +696,12 @@ def check_layout(doc, fields, rep: Report) -> None:
                               f"after scale, which does not fit {span_width} bit(s) "
                               f"({cap_lo}..{cap_hi})")
 
-            # The shorthand must agree with the width the register declares.
-            enc = field.get("encoding")
-            if enc in ENCODING_SUGAR:
-                regs, _ = ENCODING_SUGAR[enc]
-                if regs is not None and regs != width:
-                    rep.error(f"{fat}: encoding '{enc}' is {regs} register(s) wide, but the entry "
-                              f"declares {width}")
-
         # A gap below the highest field of a packed entry is usually an omission
         # rather than a spare -- but only where the fields really are a cut-up,
         # not a single whole value written in shorthand.
-        spans = [resolve_field(reg, f) for f in regfields]
-        spans = [(lo, hi) for s in spans if s for lo, hi, _c in [s]]
-        if spans and any(hi - lo + 1 not in (capacity,) for lo, hi in spans):
+        spans = [bit_span(f, reg) for f in regfields]
+        spans = [s for s in spans if s]
+        if spans and any(hi - lo + 1 != capacity for lo, hi in spans):
             used = {b for lo, hi in spans for b in range(lo, hi + 1)}
             top = max(hi for _lo, hi in spans)
             gaps = sorted(set(range(0, top + 1)) - used)

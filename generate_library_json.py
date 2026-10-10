@@ -90,17 +90,17 @@ def decoder_for(space, reg, fields, props, unsupported):
         return {"type": "bitwise", "default": clear, "bits": bits}
 
     sig = props[fields[0]["id"]]
-    stype = sig.get("type")
-    if stype == "enum":
+    codec = sig.get("codec")
+    if codec == "enum":
         return {"type": "dictionary",
                 "entries": [{"value": int(v), "label": n}
                             for v, n in sorted(sig["enum"].items(), key=lambda kv: int(kv[0]))]}
-    if stype == "bool":
+    if codec == "bool":
         lab = sig.get("labels") or {}
         return {"type": "dictionary",
                 "entries": [{"value": 0, "label": str(lab.get(False, "false"))},
                             {"value": 1, "label": str(lab.get(True, "true"))}]}
-    if stype == "text":
+    if codec == "ascii":
         return {"type": "bytewise", "byteEncoding": "unicode"}
     if sig.get("display") == "version":
         return {"type": "bytewise", "byteEncoding": "hexadecimal",
@@ -129,7 +129,7 @@ def condition_for(sig, addr_of, props, unsupported, name):
         # A bare boolean that is a bit of a bitwise register translates to their
         # membership test against the bit's label.
         negated, ref = bare.groups()
-        if ref in addr_of and props.get(ref, {}).get("type") == "bool":
+        if ref in addr_of and props.get(ref, {}).get("codec") == "bool":
             space, addr = addr_of[ref]
             tag = "IR" if space == "input" else "HR"
             label = bit_label(props[ref].get("title") or ref)
@@ -148,7 +148,7 @@ def condition_for(sig, addr_of, props, unsupported, name):
     space, addr = addr_of[ref]
     tag = "IR" if space == "input" else "HR"
     other = props[ref]
-    if other.get("type") in ("enum", "bool"):
+    if other.get("codec") in ("enum", "bool"):
         op = "contains" if op == "==" else "!contains"
     return f"{tag}{addr} {op} {value}"
 
